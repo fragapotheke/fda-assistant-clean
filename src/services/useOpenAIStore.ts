@@ -60,7 +60,7 @@ const useOpenAIStore = create(
         }));
 
         try {
-          // 🧵 Thread erstellen
+          // Thread erstellen
           const threadRes = await fetch("https://api.openai.com/v1/threads", {
             method: "POST",
             headers: {
@@ -74,7 +74,7 @@ const useOpenAIStore = create(
           const threadId = threadData?.id;
           if (!threadId) return;
 
-          // 💬 Nachricht hinzufügen
+          // Nachricht hinzufügen
           await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
             method: "POST",
             headers: {
@@ -88,7 +88,7 @@ const useOpenAIStore = create(
             }),
           });
 
-          // ▶️ Run starten
+          // Run starten
           const runRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
             method: "POST",
             headers: {
@@ -105,7 +105,7 @@ const useOpenAIStore = create(
           const runId = runData?.id;
           if (!runId) return;
 
-          // ⏳ Auf Completion warten
+          // Auf Completion warten
           let completed = false;
           let attempts = 0;
           let result;
@@ -131,7 +131,7 @@ const useOpenAIStore = create(
 
           if (!completed) return;
 
-          // 📩 Nachrichten abrufen
+          // Nachrichten abrufen
           const messagesRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
             headers: {
               Authorization: `Bearer ${apiKey}`,
@@ -146,7 +146,7 @@ const useOpenAIStore = create(
 
           let aiMessage = lastMessage?.content?.[0]?.text?.value || "";
 
-          // 🔍 Websuche als Fallback bei unzureichender Antwort
+          // Websuche als Fallback bei schwacher Antwort
           const lower = aiMessage.toLowerCase();
           const triggersWebSearch =
             !aiMessage ||
@@ -158,26 +158,14 @@ const useOpenAIStore = create(
             lower.includes("ich bin mir nicht sicher");
 
           if (triggersWebSearch) {
-            console.log("🔍 Assistant-Antwort unzureichend – Websuche wird gestartet für:", message);
-
-            const webResults = await Promise.race([
-              searchGoogle(message),
-              new Promise<string[]>((_, reject) =>
-                setTimeout(() => reject(new Error("⏳ Websuche Timeout")), 10000)
-              ),
-            ])
-              .then((results) => results as string[])
-              .catch((err) => {
-                console.error("❗ Fehler bei Websuche oder Timeout:", err);
-                return [];
-              });
-
+            console.log("🔍 Starte Websuche als Fallback für:", message);
+            const webResults = await searchGoogle(message);
             console.log("🌐 Ergebnisse aus Websuche:", webResults);
 
             if (webResults.length > 0) {
               aiMessage = webResults.join("\n\n");
             } else {
-              aiMessage = "❗ Es konnten keine passenden Informationen über die Websuche gefunden werden.";
+              aiMessage = "❗ Keine passenden Informationen in der Websuche gefunden.";
             }
           }
 
