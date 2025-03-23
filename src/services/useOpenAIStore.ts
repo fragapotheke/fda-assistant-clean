@@ -144,27 +144,40 @@ const useOpenAIStore = create(
             (msg: any) => msg.role === "assistant"
           );
 
-          let aiMessage =
-            lastMessage?.content?.[0]?.text?.value || "";
-
-          console.log("📡 Antwort von Assistant:", aiMessage);
+          let aiMessage = lastMessage?.content?.[0]?.text?.value || "";
 
           // 🔍 Websuche als Fallback bei unzureichender Antwort
           const lower = aiMessage.toLowerCase();
           const triggersWebSearch =
             !aiMessage ||
-            aiMessage.length < 100 ||
-            /keine|leider konnte|nicht sicher|empfehle dir|besuche|unbekannt/i.test(lower);
+            aiMessage.length < 60 ||
+            lower.includes("keine informationen") ||
+            lower.includes("leider konnte ich") ||
+            lower.includes("ich empfehle dir") ||
+            lower.includes("besuche die offizielle seite") ||
+            lower.includes("ich bin mir nicht sicher");
 
           if (triggersWebSearch) {
-            console.log("🔍 Starte Websuche als Fallback für:", message);
-            const webResults = await searchGoogle(message);
+            console.log("🔍 Assistant-Antwort unzureichend – Websuche wird gestartet für:", message);
+
+            const webResults = await Promise.race([
+              searchGoogle(message),
+              new Promise<string[]>((_, reject) =>
+                setTimeout(() => reject(new Error("⏳ Websuche Timeout")), 10000)
+              ),
+            ])
+              .then((results) => results as string[])
+              .catch((err) => {
+                console.error("❗ Fehler bei Websuche oder Timeout:", err);
+                return [];
+              });
+
             console.log("🌐 Ergebnisse aus Websuche:", webResults);
 
             if (webResults.length > 0) {
               aiMessage = webResults.join("\n\n");
             } else {
-              aiMessage = "❗ Keine passenden Informationen in der Websuche gefunden.";
+              aiMessage = "❗ Es konnten keine passenden Informationen über die Websuche gefunden werden.";
             }
           }
 
