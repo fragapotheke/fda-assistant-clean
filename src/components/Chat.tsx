@@ -1,12 +1,11 @@
 "use client";
 
-import React, { useRef, useEffect } from "react";
+import React from "react";
 import useOpenAIStore from "@/services/useOpenAIStore";
 import { IDetailsWidget } from "@livechat/agent-app-sdk";
 
 export default function Chat({ widget }: { widget: IDetailsWidget }) {
   const { chats, typing, message, typeMessage, getMessage } = useOpenAIStore();
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,14 +17,6 @@ export default function Chat({ widget }: { widget: IDetailsWidget }) {
       console.log("✅ In Zwischenablage kopiert");
     });
   };
-
-  // Auto-Resize-Funktion
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-    }
-  }, [message]);
 
   return (
     <div className="chat-main">
@@ -87,46 +78,44 @@ export default function Chat({ widget }: { widget: IDetailsWidget }) {
       <form
         className="chat-input-form"
         onSubmit={handleSubmit}
-        style={{
-          width: "100%",
-          display: "flex",
-          padding: "10px",
-          alignItems: "center",
-          boxSizing: "border-box",
-        }}
+        style={{ width: "100%", display: "flex", padding: "10px" }}
       >
         <textarea
-          ref={textareaRef}
           value={message}
           onChange={(e) => typeMessage(e.target.value)}
           placeholder="Deine Frage..."
           className="chat-input"
-          rows={1}
+          rows={3}
           style={{
             flexGrow: 1,
-            padding: "10px",
+            padding: "12px",
             borderRadius: "8px",
             border: "1px solid #ccc",
             fontSize: "14px",
             marginRight: "10px",
             resize: "none",
-            overflow: "hidden",
-            maxHeight: "200px",
+            lineHeight: "1.4",
+            maxHeight: "150px",
+            overflowY: "auto",
           }}
         />
         <button
           type="submit"
           style={{
-            padding: "10px 16px",
+            padding: "10px",
             borderRadius: "8px",
             border: "none",
             backgroundColor: "#fb4f39",
             color: "#fff",
             fontWeight: "bold",
             cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
           }}
+          title="Absenden"
         >
-          Senden
+          ➤
         </button>
       </form>
     </div>
