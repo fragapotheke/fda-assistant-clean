@@ -147,16 +147,14 @@ const useOpenAIStore = create(
           let aiMessage =
             lastMessage?.content?.[0]?.text?.value || "";
 
+          console.log("📡 Antwort von Assistant:", aiMessage);
+
           // 🔍 Websuche als Fallback bei unzureichender Antwort
           const lower = aiMessage.toLowerCase();
           const triggersWebSearch =
             !aiMessage ||
-            aiMessage.length < 60 ||
-            lower.includes("keine informationen") ||
-            lower.includes("leider konnte ich") ||
-            lower.includes("ich empfehle dir") ||
-            lower.includes("besuche die offizielle seite") ||
-            lower.includes("ich bin mir nicht sicher");
+            aiMessage.length < 100 ||
+            /keine|leider konnte|nicht sicher|empfehle dir|besuche|unbekannt/i.test(lower);
 
           if (triggersWebSearch) {
             console.log("🔍 Starte Websuche als Fallback für:", message);
