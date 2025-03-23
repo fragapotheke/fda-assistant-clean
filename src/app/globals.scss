@@ -25,6 +25,8 @@ $background: #f7f7f7;
 
 .chat-main {
   width: 100vw;
+  max-width: 600px; // ✅ maximale Breite der App
+  margin: 0 auto; // ✅ zentriert die App horizontal
 
   .chat-head {
     width: 100%;
@@ -218,4 +220,7 @@ body {
   overflow-x: hidden;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  font-size: 16px;
+  margin: 0;
+  padding: 0;
 }
