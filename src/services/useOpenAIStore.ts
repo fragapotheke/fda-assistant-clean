@@ -2,7 +2,7 @@ import { IDetailsWidget } from "@livechat/agent-app-sdk";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
 import removeMarkdown from "remove-markdown";
-import searchGoogle from "./googleSearch";
+import { searchGoogle } from "@/services/googleSearch"; // ✅ Google-Suche importiert
 
 const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY!;
 const assistantId = process.env.NEXT_PUBLIC_ASSISTANT_ID!;
@@ -60,6 +60,7 @@ const useOpenAIStore = create(
         }));
 
         try {
+          // 🧵 Thread erstellen
           const threadRes = await fetch("https://api.openai.com/v1/threads", {
             method: "POST",
             headers: {
@@ -73,6 +74,7 @@ const useOpenAIStore = create(
           const threadId = threadData?.id;
           if (!threadId) return;
 
+          // 💬 Nachricht hinzufügen
           await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
             method: "POST",
             headers: {
@@ -86,6 +88,7 @@ const useOpenAIStore = create(
             }),
           });
 
+          // ▶️ Run starten
           const runRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
             method: "POST",
             headers: {
@@ -102,6 +105,7 @@ const useOpenAIStore = create(
           const runId = runData?.id;
           if (!runId) return;
 
+          // ⏳ Auf Completion warten
           let completed = false;
           let attempts = 0;
           let result;
@@ -119,11 +123,15 @@ const useOpenAIStore = create(
             if (checkData.status === "completed") {
               completed = true;
               result = checkData;
+              break;
             }
 
             attempts++;
           }
 
+          if (!completed) return;
+
+          // 📩 Nachrichten abrufen
           const messagesRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
             headers: {
               Authorization: `Bearer ${apiKey}`,
@@ -136,30 +144,21 @@ const useOpenAIStore = create(
             (msg: any) => msg.role === "assistant"
           );
 
-          const aiMessage = lastMessage?.content?.[0]?.text?.value || "";
+          let aiMessage =
+            lastMessage?.content?.[0]?.text?.value || "";
 
-          if (aiMessage && aiMessage.trim() !== "Ich habe keine Informationen gefunden.") {
-            set((prev) => ({
-              chats: [
-                ...prev.chats,
-                {
-                  message: {
-                    data: {
-                      content: removeMarkdown(aiMessage),
-                      is_chunk: false,
-                      type: "ai",
-                    },
-                    type: "ai",
-                  },
-                },
-              ],
-              typing: false,
-            }));
-            return;
+          // Wenn die Antwort leer ist oder keine fundierten Inhalte enthält → Websuche als Fallback
+          if (!aiMessage || aiMessage.toLowerCase().includes("keine informationen")) {
+            console.log("🔍 Starte Websuche als Fallback für:", message);
+            const webResults = await searchGoogle(message);
+            console.log("🌐 Ergebnisse aus Websuche:", webResults);
+
+            if (webResults.length > 0) {
+              aiMessage = webResults.join("\n\n");
+            } else {
+              aiMessage = "❗ Keine passenden Informationen in der Websuche gefunden.";
+            }
           }
-
-          // ❗ Websuche als Fallback
-          const webResult = await searchGoogle(message);
 
           set((prev) => ({
             chats: [
@@ -167,7 +166,7 @@ const useOpenAIStore = create(
               {
                 message: {
                   data: {
-                    content: removeMarkdown(webResult),
+                    content: removeMarkdown(aiMessage),
                     is_chunk: false,
                     type: "ai",
                   },
@@ -178,7 +177,7 @@ const useOpenAIStore = create(
             typing: false,
           }));
         } catch (error) {
-          console.error("❗ Fehler im Assistant Flow", error);
+          console.error("❗ Fehler im Assistant-Flow:", error);
           set({ typing: false });
         }
       },
