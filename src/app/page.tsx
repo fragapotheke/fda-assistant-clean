@@ -1,15 +1,14 @@
 "use client";
 
 import React from "react";
-import Chat from "../components/Chat"; // Oder "@/components/Chat", falls dein Pfadalias funktioniert
+import Chat from "../components/Chat"; // oder "@/components/Chat", wenn Pfadalias
 
 export default function Page() {
-  // Dummy-Widget für den lokalen Test, simuliert LiveChat-Session
   const mockWidget = {
     getCustomerProfile: () => ({
-      id: "test-session-123", // beliebige Session-ID
+      id: "test-session-123",
     }),
   };
 
-  return <Chat widget={mockWidget} />;
+  return <Chat widget={mockWidget as any} />;
 }
