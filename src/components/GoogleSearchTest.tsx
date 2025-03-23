@@ -1,7 +1,8 @@
+// src/components/GoogleSearchTest.tsx
 "use client";
 
 import React, { useState } from "react";
-import { searchGoogle } from "@/services/googleSearch";
+import { searchGoogleJSON } from "@/services/googleSearch";
 
 export default function GoogleSearchTest() {
   const [query, setQuery] = useState("");
@@ -9,45 +10,54 @@ export default function GoogleSearchTest() {
   const [loading, setLoading] = useState(false);
 
   const handleSearch = async () => {
+    if (!query.trim()) return;
     setLoading(true);
-    const res = await searchGoogle(query);
-    setResults(res);
+    const data = await searchGoogleJSON(query);
+    setResults(data);
     setLoading(false);
   };
 
   return (
     <div style={{ padding: "2rem" }}>
       <h2>🔍 Google-Suche testen</h2>
+
       <input
         type="text"
+        placeholder="Suchbegriff eingeben..."
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="Suchbegriff eingeben"
         style={{
-          padding: "10px",
-          fontSize: "16px",
+          padding: "0.5rem",
+          fontSize: "1rem",
           width: "100%",
-          maxWidth: "400px",
           marginBottom: "1rem",
         }}
       />
-      <br />
-      <button onClick={handleSearch} disabled={loading}>
-        {loading ? "Suche läuft..." : "Jetzt suchen"}
+
+      <button
+        onClick={handleSearch}
+        style={{
+          padding: "0.5rem 1rem",
+          fontSize: "1rem",
+          backgroundColor: "#0070f3",
+          color: "#fff",
+          border: "none",
+          borderRadius: "4px",
+          cursor: "pointer",
+        }}
+      >
+        Jetzt suchen
       </button>
-      <div style={{ marginTop: "2rem" }}>
-        {results.length > 0 ? (
-          <ul>
-            {results.map((r, i) => (
-              <li key={i} style={{ marginBottom: "1rem", fontSize: "14px" }}>
-                <pre>{r}</pre>
-              </li>
-            ))}
-          </ul>
-        ) : loading ? null : (
-          <p>Keine Ergebnisse</p>
-        )}
-      </div>
+
+      {loading && <p>⏳ Suche läuft...</p>}
+
+      <ul style={{ marginTop: "1rem", lineHeight: "1.6" }}>
+        {results.map((item, idx) => (
+          <li key={idx}>
+            <div dangerouslySetInnerHTML={{ __html: item }} />
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
