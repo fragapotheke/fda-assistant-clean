@@ -60,7 +60,7 @@ const useOpenAIStore = create(
         }));
 
         try {
-          // 🧵 Thread erstellen
+          // 🔁 1. Thread erstellen
           const threadRes = await fetch("https://api.openai.com/v1/threads", {
             method: "POST",
             headers: {
@@ -69,12 +69,11 @@ const useOpenAIStore = create(
               "OpenAI-Beta": "assistants=v2",
             },
           });
-
           const threadData = await threadRes.json();
           const threadId = threadData?.id;
           if (!threadId) return;
 
-          // 💬 Nachricht hinzufügen
+          // ➕ 2. Nachricht hinzufügen
           await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
             method: "POST",
             headers: {
@@ -88,7 +87,7 @@ const useOpenAIStore = create(
             }),
           });
 
-          // ▶️ Run starten
+          // ▶️ 3. Assistant-Run starten
           const runRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
             method: "POST",
             headers: {
@@ -105,62 +104,57 @@ const useOpenAIStore = create(
           const runId = runData?.id;
           if (!runId) return;
 
-          // ⏳ Auf Completion warten
+          // ⏳ 4. Auf Abschluss warten (max. 10s)
           let completed = false;
           let attempts = 0;
-          let result;
 
           while (!completed && attempts < 10) {
             await new Promise((r) => setTimeout(r, 1000));
-            const checkRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs/${runId}`, {
-              headers: {
-                Authorization: `Bearer ${apiKey}`,
-                "OpenAI-Beta": "assistants=v2",
-              },
-            });
-
+            const checkRes = await fetch(
+              `https://api.openai.com/v1/threads/${threadId}/runs/${runId}`,
+              {
+                headers: {
+                  Authorization: `Bearer ${apiKey}`,
+                  "OpenAI-Beta": "assistants=v2",
+                },
+              }
+            );
             const checkData = await checkRes.json();
             if (checkData.status === "completed") {
               completed = true;
-              result = checkData;
               break;
             }
-
             attempts++;
           }
 
           if (!completed) return;
 
-          // 📩 Nachrichten abrufen
-          const messagesRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
-            headers: {
-              Authorization: `Bearer ${apiKey}`,
-              "OpenAI-Beta": "assistants=v2",
-            },
-          });
-
+          // 📩 5. Antwort abrufen
+          const messagesRes = await fetch(
+            `https://api.openai.com/v1/threads/${threadId}/messages`,
+            {
+              headers: {
+                Authorization: `Bearer ${apiKey}`,
+                "OpenAI-Beta": "assistants=v2",
+              },
+            }
+          );
           const messagesData = await messagesRes.json();
           const lastMessage = messagesData.data?.find(
             (msg: any) => msg.role === "assistant"
           );
-
           let aiMessage = lastMessage?.content?.[0]?.text?.value || "";
 
-          // 🔍 Websuche als Fallback bei unzureichender Antwort
-          const lower = aiMessage.toLowerCase();
-          const triggersWebSearch =
-            !aiMessage ||
-            lower.includes("keine informationen") ||
-            lower.includes("leider konnte ich") ||
-            lower.includes("nicht finden") ||
-            lower.includes("ich empfehle dir") ||
-            lower.includes("besuche die offizielle seite") ||
-            lower.includes("ich bin mir nicht sicher");
+          // 📉 6. Qualität prüfen → Websuche starten, falls nötig
+          const shouldFallbackToGoogle = !aiMessage ||
+            aiMessage.length < 60 ||
+            aiMessage.toLowerCase().includes("keine information") ||
+            aiMessage.toLowerCase().includes("offizielle webseite") ||
+            aiMessage.toLowerCase().includes("leider konnte ich");
 
-          if (triggersWebSearch) {
-            console.log("🔍 Starte Websuche als Fallback für:", message);
+          if (shouldFallbackToGoogle) {
+            console.log("🌍 Assistant-Antwort zu vage → Starte Google-Suche…");
             const webResults = await searchGoogle(message);
-            console.log("🌐 Ergebnisse aus Websuche:", webResults);
 
             if (webResults.length > 0) {
               aiMessage = webResults.join("\n\n");
@@ -169,6 +163,7 @@ const useOpenAIStore = create(
             }
           }
 
+          // ✅ 7. Antwort anzeigen
           set((prev) => ({
             chats: [
               ...prev.chats,
@@ -186,7 +181,7 @@ const useOpenAIStore = create(
             typing: false,
           }));
         } catch (error) {
-          console.error("❗ Fehler im Assistant-Flow:", error);
+          console.error("❗ Fehler im Assistant/Websuche Flow:", error);
           set({ typing: false });
         }
       },

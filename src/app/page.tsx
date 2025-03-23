@@ -1,13 +1,14 @@
 "use client";
 
 import React from "react";
-import GoogleSearchTest from "../components/GoogleSearchTest"; // Oder "@/components/GoogleSearchTest", falls du Aliase nutzt
+import Chat from "../components/Chat"; // oder "@/components/Chat", wenn Pfadalias
 
 export default function Page() {
-  return (
-    <main style={{ padding: "2rem", fontFamily: "sans-serif" }}>
-      <h2>🔍 Google-Suche testen</h2>
-      <GoogleSearchTest />
-    </main>
-  );
+  const mockWidget = {
+    getCustomerProfile: () => ({
+      id: "test-session-123",
+    }),
+  };
+
+  return <Chat widget={mockWidget as any} />;
 }
