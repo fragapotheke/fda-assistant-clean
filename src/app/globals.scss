@@ -1,0 +1,188 @@
+@import url("https://fonts.googleapis.com/css?family=Red+Hat+Display:400,500,900&display=swap");
+
+$text-1: #fb4f39;
+$text-2: #666;
+$text-3: #999;
+$line: #ccc;
+$time-bg: #eee;
+$background: #f7f7f7;
+
+* {
+	padding: 0;
+	margin: 0;
+	box-sizing: border-box;
+}
+
+.fullscreen-enabled {
+	.chat-head {
+		background: white;
+	}
+	.chat-input-form {
+		background: white;
+		z-index: 100;
+	}
+}
+
+.chat-main {
+	width: 100vw;
+
+	.chat-head {
+		width: 100%;
+		height: 10%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		box-shadow: rgba(149, 157, 165, 0.2) 0px 8px 24px;
+
+		.chat-head-action {
+			width: 10%;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
+
+		.chat-head-user {
+			width: 70%;
+			display: flex;
+			align-items: center;
+
+			.chat-head-user-photo {
+				width: 15%;
+
+				img {
+					width: 90%;
+					height: 40px;
+					object-fit: contain;
+					// Filter entfernt – zeigt Logo in Originalfarben
+				}
+			}
+
+			.chat-head-user-name {
+				width: 85%;
+
+				p {
+					font-weight: 600;
+				}
+			}
+		}
+	}
+
+	.chat-body {
+		width: 100%;
+		height: 80%;
+		padding: 1rem;
+		background: $background;
+		flex-shrink: 2;
+		overflow-y: auto;
+		box-shadow:
+			inset 0 2rem 2rem -2rem rgba(black, 0.05),
+			inset 0 -2rem 2rem -2rem rgba(black, 0.05);
+		position: relative;
+
+		.time {
+			font-size: 0.8rem;
+			background: $time-bg;
+			padding: 0.25rem 1rem;
+			border-radius: 2rem;
+			color: $text-3;
+			width: fit-content;
+			margin: 0 auto;
+		}
+
+		.message {
+			box-sizing: border-box;
+			padding: 0.5rem 1rem;
+			margin: 1rem;
+			background: #fff;
+			border-radius: 1.125rem 1.125rem 1.125rem 0;
+			min-height: 2.25rem;
+			width: fit-content;
+			max-width: 66%;
+			font-size: 12px;
+			display: flex;
+			align-items: center;
+			box-shadow:
+				0 0 2rem rgba(black, 0.075),
+				0rem 1rem 1rem -1rem rgba(black, 0.1);
+			position: relative;
+
+			.actions {
+				position: absolute;
+				right: -50px;
+			}
+
+			&.right {
+				margin: 1rem 1rem 1rem auto;
+				border-radius: 1.125rem 1.125rem 0 1.125rem;
+				background: $text-1;
+				color: white;
+			}
+
+			.typing {
+				display: inline-block;
+				width: 0.8rem;
+				height: 0.8rem;
+				margin-right: 0rem;
+				box-sizing: border-box;
+				background: #ccc;
+				border-radius: 50%;
+
+				&.typing-1 {
+					animation: typing 3s infinite;
+				}
+				&.typing-2 {
+					animation: typing 3s 250ms infinite;
+				}
+				&.typing-3 {
+					animation: typing 3s 500ms infinite;
+				}
+			}
+
+			pre {
+				overflow-x: auto;
+				white-space: pre-wrap;
+				white-space: -moz-pre-wrap;
+				white-space: -pre-wrap;
+				white-space: -o-pre-wrap;
+				word-wrap: break-word;
+				font-style: normal;
+				font-family: Verdana, "Bitstream Vera Sans", Geneva, sans-serif;
+			}
+		}
+
+		.system-message {
+			background: unset !important;
+		}
+
+		@keyframes typing {
+			0%, 75%, 100% {
+				transform: translate(0, 0.25rem) scale(0.9);
+				opacity: 0.5;
+			}
+
+			25% {
+				transform: translate(0, -0.25rem) scale(1);
+				opacity: 1;
+			}
+		}
+	}
+
+	.chat-input-form {
+		width: 100%;
+		min-height: 10%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 5px;
+		z-index: 10;
+		position: relative;
+	}
+}
+
+.chat-body::-webkit-scrollbar {
+	display: none;
+}
+
+.report-link-container {
+	display: none !important;
+}
