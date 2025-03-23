@@ -38,9 +38,10 @@ const useOpenAIStore = create(
     },
     (set, get) => ({
       getMessage: async (widget: IDetailsWidget) => {
-        const message = get().message;
-        if (!message || !assistantId) return;
+        const userInput = get().message;
+        if (!userInput || !assistantId) return;
 
+        // Menschliche Nachricht anzeigen
         set((prev) => ({
           typing: true,
           chats: [
@@ -48,7 +49,7 @@ const useOpenAIStore = create(
             {
               message: {
                 data: {
-                  content: message,
+                  content: userInput,
                   is_chunk: false,
                   type: "human",
                 },
@@ -59,8 +60,7 @@ const useOpenAIStore = create(
           message: "",
         }));
 
-        try {
-          // 🧵 Thread erstellen
+        const askAssistant = async (content: string) => {
           const threadRes = await fetch("https://api.openai.com/v1/threads", {
             method: "POST",
             headers: {
@@ -70,11 +70,8 @@ const useOpenAIStore = create(
             },
           });
 
-          const threadData = await threadRes.json();
-          const threadId = threadData?.id;
-          if (!threadId) throw new Error("Kein Thread erstellt");
+          const { id: threadId } = await threadRes.json();
 
-          // 💬 Nachricht hinzufügen
           await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
             method: "POST",
             headers: {
@@ -84,11 +81,10 @@ const useOpenAIStore = create(
             },
             body: JSON.stringify({
               role: "user",
-              content: message,
+              content,
             }),
           });
 
-          // ▶️ Run starten
           const runRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
             method: "POST",
             headers: {
@@ -96,85 +92,72 @@ const useOpenAIStore = create(
               Authorization: `Bearer ${apiKey}`,
               "OpenAI-Beta": "assistants=v2",
             },
-            body: JSON.stringify({
-              assistant_id: assistantId,
-            }),
+            body: JSON.stringify({ assistant_id: assistantId }),
           });
 
-          const runData = await runRes.json();
-          const runId = runData?.id;
-          if (!runId) throw new Error("Kein Run gestartet");
+          const { id: runId } = await runRes.json();
 
-          // ⏳ Warte max. 10s auf Abschluss
           let completed = false;
           let attempts = 0;
-          let result;
-
           while (!completed && attempts < 10) {
             await new Promise((r) => setTimeout(r, 1000));
-            const checkRes = await fetch(
-              `https://api.openai.com/v1/threads/${threadId}/runs/${runId}`,
-              {
-                headers: {
-                  Authorization: `Bearer ${apiKey}`,
-                  "OpenAI-Beta": "assistants=v2",
-                },
-              }
-            );
-
-            const checkData = await checkRes.json();
-            if (checkData.status === "completed") {
+            const check = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs/${runId}`, {
+              headers: {
+                Authorization: `Bearer ${apiKey}`,
+                "OpenAI-Beta": "assistants=v2",
+              },
+            });
+            const data = await check.json();
+            if (data.status === "completed") {
               completed = true;
-              result = checkData;
               break;
             }
-
             attempts++;
           }
 
-          // 📩 Assistant-Antwort abrufen
-          const messagesRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
+          const msgRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
             headers: {
               Authorization: `Bearer ${apiKey}`,
               "OpenAI-Beta": "assistants=v2",
             },
           });
 
-          const messagesData = await messagesRes.json();
-          const lastMessage = messagesData.data?.find(
-            (msg: any) => msg.role === "assistant"
-          );
+          const msgData = await msgRes.json();
+          const lastMessage = msgData.data?.find((msg: any) => msg.role === "assistant");
+          return lastMessage?.content?.[0]?.text?.value?.trim() || "";
+        };
 
-          let aiMessage = lastMessage?.content?.[0]?.text?.value || "";
+        try {
+          let aiResponse = await askAssistant(userInput);
+          const aiResponseLower = aiResponse.toLowerCase();
 
-          // 🔍 Prüfe, ob Antwort unbrauchbar → Fallback auf Websuche
-          const isEmptyOrWeak =
-            !aiMessage ||
-            aiMessage.length < 60 ||
-            aiMessage.toLowerCase().includes("keine informationen") ||
-            aiMessage.toLowerCase().includes("leider konnte ich") ||
-            aiMessage.toLowerCase().includes("besuche die offizielle");
+          const isWeak =
+            !aiResponse ||
+            aiResponse.length < 60 ||
+            aiResponseLower.includes("keine information") ||
+            aiResponseLower.includes("besuche die offizielle") ||
+            aiResponseLower.includes("ich konnte leider");
 
-          if (isEmptyOrWeak) {
-            console.log("🧭 Fallback: Starte Google-Suche für:", message);
-            const webResults = await searchGoogle(message);
+          if (isWeak) {
+            console.log("🧠 Unzureichende Antwort – starte Websuche");
+            const webResults = await searchGoogle(userInput);
+            console.log("🌐 Google-Ergebnisse:", webResults);
 
             if (webResults.length > 0) {
-              aiMessage = webResults.join("\n\n");
+              const googleContext = `Hier sind Web-Ergebnisse zu meiner Frage:\n\n${webResults.join("\n\n")}\n\nBitte fasse die Informationen strukturiert zusammen.`;
+              aiResponse = await askAssistant(`${userInput}\n\n${googleContext}`);
             } else {
-              aiMessage =
-                "❗ Keine passenden Informationen in der Websuche gefunden.";
+              aiResponse = "❗ Es konnten keine passenden Web-Ergebnisse gefunden werden.";
             }
           }
 
-          // ✅ Nachricht in Chat setzen
           set((prev) => ({
             chats: [
               ...prev.chats,
               {
                 message: {
                   data: {
-                    content: removeMarkdown(aiMessage),
+                    content: removeMarkdown(aiResponse),
                     is_chunk: false,
                     type: "ai",
                   },
@@ -186,23 +169,7 @@ const useOpenAIStore = create(
           }));
         } catch (error) {
           console.error("❗ Fehler im Assistant-Flow:", error);
-          set({
-            chats: [
-              ...get().chats,
-              {
-                message: {
-                  data: {
-                    content:
-                      "❗ Es gab ein technisches Problem bei der Anfrage. Bitte versuche es später erneut.",
-                    is_chunk: false,
-                    type: "ai",
-                  },
-                  type: "ai",
-                },
-              },
-            ],
-            typing: false,
-          });
+          set({ typing: false });
         }
       },
 
