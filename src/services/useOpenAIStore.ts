@@ -2,7 +2,7 @@ import { IDetailsWidget } from "@livechat/agent-app-sdk";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
 import removeMarkdown from "remove-markdown";
-import { searchGoogle } from "@/services/googleSearch"; // ✅ Google-Suche importiert
+import { searchGoogle } from "@/services/googleSearch";
 
 const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY!;
 const assistantId = process.env.NEXT_PUBLIC_ASSISTANT_ID!;
@@ -147,8 +147,18 @@ const useOpenAIStore = create(
           let aiMessage =
             lastMessage?.content?.[0]?.text?.value || "";
 
-          // Wenn die Antwort leer ist oder keine fundierten Inhalte enthält → Websuche als Fallback
-          if (!aiMessage || aiMessage.toLowerCase().includes("keine informationen")) {
+          // 🔍 Websuche als Fallback bei unzureichender Antwort
+          const lower = aiMessage.toLowerCase();
+          const triggersWebSearch =
+            !aiMessage ||
+            aiMessage.length < 60 ||
+            lower.includes("keine informationen") ||
+            lower.includes("leider konnte ich") ||
+            lower.includes("ich empfehle dir") ||
+            lower.includes("besuche die offizielle seite") ||
+            lower.includes("ich bin mir nicht sicher");
+
+          if (triggersWebSearch) {
             console.log("🔍 Starte Websuche als Fallback für:", message);
             const webResults = await searchGoogle(message);
             console.log("🌐 Ergebnisse aus Websuche:", webResults);
