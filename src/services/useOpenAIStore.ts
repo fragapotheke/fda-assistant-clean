@@ -41,6 +41,7 @@ const useOpenAIStore = create(
         const message = get().message;
         if (!message || !assistantId) return;
 
+        // Nutzeranfrage abspeichern
         set((prev) => ({
           typing: true,
           chats: [
@@ -60,6 +61,9 @@ const useOpenAIStore = create(
         }));
 
         try {
+          console.log("🧵 Starte neuen Assistant-Thread...");
+
+          // 🧵 Thread erstellen
           const threadRes = await fetch("https://api.openai.com/v1/threads", {
             method: "POST",
             headers: {
@@ -73,6 +77,9 @@ const useOpenAIStore = create(
           const threadId = threadData?.id;
           if (!threadId) return;
 
+          console.log("📨 Sende Nutzernachricht an Assistant...");
+
+          // 💬 Nachricht hinzufügen
           await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
             method: "POST",
             headers: {
@@ -86,6 +93,7 @@ const useOpenAIStore = create(
             }),
           });
 
+          // ▶️ Run starten
           const runRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
             method: "POST",
             headers: {
@@ -102,6 +110,7 @@ const useOpenAIStore = create(
           const runId = runData?.id;
           if (!runId) return;
 
+          // ⏳ Auf Antwort warten
           let completed = false;
           let attempts = 0;
           let result;
@@ -127,6 +136,7 @@ const useOpenAIStore = create(
 
           if (!completed) return;
 
+          // 📩 Antwort extrahieren
           const messagesRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
             headers: {
               Authorization: `Bearer ${apiKey}`,
@@ -142,30 +152,99 @@ const useOpenAIStore = create(
           let aiMessage =
             lastMessage?.content?.[0]?.text?.value || "";
 
-          // 🧠 Fallback auf Websuche bei schwacher Antwort
+          console.log("📥 Erste Assistant-Antwort:", aiMessage);
+
+          // Schwache Antwort erkennen
           const lower = aiMessage.toLowerCase();
           const triggersWebSearch =
             !aiMessage ||
-            aiMessage.length < 80 ||
+            aiMessage.length < 100 ||
             lower.includes("keine informationen") ||
-            lower.includes("leider konnte ich") ||
-            lower.includes("besuche die offizielle seite") ||
-            lower.includes("ich bin mir nicht sicher");
+            lower.includes("besuche die offizielle") ||
+            lower.includes("leider konnte ich");
 
           if (triggersWebSearch) {
-            console.log("🔍 Assistant-Antwort zu schwach → Starte Google-Suche...");
-
+            console.log("🔍 Starte Websuche wegen unzureichender Antwort...");
             const webResults = await searchGoogle(message);
             console.log("🌐 Ergebnisse aus Websuche:", webResults);
 
             if (webResults.length > 0) {
-              aiMessage = webResults.join("\n\n");
-              console.log("✅ Web-Ergebnisse übernommen.");
-            } else {
-              aiMessage = "❗ Keine passenden Informationen in der Websuche gefunden.";
+              // Neue Assistant-Runde mit Web-Daten starten
+              console.log("📨 Sende Web-Ergebnisse als Kontext an Assistant...");
+
+              await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${apiKey}`,
+                  "OpenAI-Beta": "assistants=v2",
+                },
+                body: JSON.stringify({
+                  role: "user",
+                  content: `Hier sind Informationen aus einer Websuche:\n\n${webResults.join("\n\n")}\n\nBitte beantworte die ursprüngliche Frage mit diesen Informationen so klar und strukturiert wie möglich.`,
+                }),
+              });
+
+              // ⏯️ Neuer Run
+              const runRes2 = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${apiKey}`,
+                  "OpenAI-Beta": "assistants=v2",
+                },
+                body: JSON.stringify({
+                  assistant_id: assistantId,
+                }),
+              });
+
+              const runData2 = await runRes2.json();
+              const runId2 = runData2?.id;
+              if (!runId2) return;
+
+              // ⏳ Warten auf zweite Antwort
+              let completed2 = false;
+              let attempts2 = 0;
+              let result2;
+
+              while (!completed2 && attempts2 < 10) {
+                await new Promise((r) => setTimeout(r, 1000));
+                const checkRes2 = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs/${runId2}`, {
+                  headers: {
+                    Authorization: `Bearer ${apiKey}`,
+                    "OpenAI-Beta": "assistants=v2",
+                  },
+                });
+
+                const checkData2 = await checkRes2.json();
+                if (checkData2.status === "completed") {
+                  completed2 = true;
+                  result2 = checkData2;
+                  break;
+                }
+
+                attempts2++;
+              }
+
+              if (completed2) {
+                const finalMessagesRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
+                  headers: {
+                    Authorization: `Bearer ${apiKey}`,
+                    "OpenAI-Beta": "assistants=v2",
+                  },
+                });
+
+                const finalMessagesData = await finalMessagesRes.json();
+                const finalMessage = finalMessagesData.data?.find(
+                  (msg: any) => msg.role === "assistant"
+                );
+
+                aiMessage = finalMessage?.content?.[0]?.text?.value || aiMessage;
+              }
             }
           }
 
+          // 🧠 Antwort anzeigen
           set((prev) => ({
             chats: [
               ...prev.chats,
