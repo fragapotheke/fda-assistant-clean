@@ -1,11 +1,12 @@
 "use client";
 
-import React from "react";
+import React, { useRef, useEffect } from "react";
 import useOpenAIStore from "@/services/useOpenAIStore";
 import { IDetailsWidget } from "@livechat/agent-app-sdk";
 
 export default function Chat({ widget }: { widget: IDetailsWidget }) {
   const { chats, typing, message, typeMessage, getMessage } = useOpenAIStore();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,6 +18,14 @@ export default function Chat({ widget }: { widget: IDetailsWidget }) {
       console.log("✅ In Zwischenablage kopiert");
     });
   };
+
+  // Auto-Resize-Funktion
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [message]);
 
   return (
     <div className="chat-main">
@@ -38,7 +47,7 @@ export default function Chat({ widget }: { widget: IDetailsWidget }) {
             style={{
               display: "flex",
               justifyContent: chat.message.type === "human" ? "flex-end" : "flex-start",
-              alignItems: "center", // <— Hier zentrieren wir vertikal!
+              alignItems: "center",
               gap: "10px",
               marginRight: chat.message.type === "human" ? "0" : "10px",
               marginLeft: chat.message.type === "ai" ? "0" : "10px",
@@ -78,13 +87,21 @@ export default function Chat({ widget }: { widget: IDetailsWidget }) {
       <form
         className="chat-input-form"
         onSubmit={handleSubmit}
-        style={{ width: "100%", display: "flex", padding: "10px" }}
+        style={{
+          width: "100%",
+          display: "flex",
+          padding: "10px",
+          alignItems: "center",
+          boxSizing: "border-box",
+        }}
       >
-        <input
+        <textarea
+          ref={textareaRef}
           value={message}
           onChange={(e) => typeMessage(e.target.value)}
           placeholder="Deine Frage..."
           className="chat-input"
+          rows={1}
           style={{
             flexGrow: 1,
             padding: "10px",
@@ -92,6 +109,9 @@ export default function Chat({ widget }: { widget: IDetailsWidget }) {
             border: "1px solid #ccc",
             fontSize: "14px",
             marginRight: "10px",
+            resize: "none",
+            overflow: "hidden",
+            maxHeight: "200px",
           }}
         />
         <button
