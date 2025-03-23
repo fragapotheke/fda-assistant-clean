@@ -38,8 +38,8 @@ const useOpenAIStore = create(
     },
     (set, get) => ({
       getMessage: async (widget: IDetailsWidget) => {
-        const userMessage = get().message;
-        if (!userMessage || !assistantId) return;
+        const message = get().message;
+        if (!message || !assistantId) return;
 
         set((prev) => ({
           typing: true,
@@ -48,7 +48,7 @@ const useOpenAIStore = create(
             {
               message: {
                 data: {
-                  content: userMessage,
+                  content: message,
                   is_chunk: false,
                   type: "human",
                 },
@@ -60,10 +60,6 @@ const useOpenAIStore = create(
         }));
 
         try {
-          // ⏱ Timer starten
-          const startTime = Date.now();
-
-          // 🧵 Thread erstellen
           const threadRes = await fetch("https://api.openai.com/v1/threads", {
             method: "POST",
             headers: {
@@ -72,11 +68,11 @@ const useOpenAIStore = create(
               "OpenAI-Beta": "assistants=v2",
             },
           });
+
           const threadData = await threadRes.json();
           const threadId = threadData?.id;
           if (!threadId) return;
 
-          // 💬 User-Nachricht hinzufügen
           await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
             method: "POST",
             headers: {
@@ -86,11 +82,10 @@ const useOpenAIStore = create(
             },
             body: JSON.stringify({
               role: "user",
-              content: userMessage,
+              content: message,
             }),
           });
 
-          // ▶️ Run starten
           const runRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
             method: "POST",
             headers: {
@@ -102,11 +97,11 @@ const useOpenAIStore = create(
               assistant_id: assistantId,
             }),
           });
+
           const runData = await runRes.json();
           const runId = runData?.id;
           if (!runId) return;
 
-          // ⏳ Warten auf Completion (max. 10 Sek.)
           let completed = false;
           let attempts = 0;
           let result;
@@ -126,8 +121,11 @@ const useOpenAIStore = create(
               result = checkData;
               break;
             }
+
             attempts++;
           }
+
+          if (!completed) return;
 
           const messagesRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
             headers: {
@@ -135,92 +133,36 @@ const useOpenAIStore = create(
               "OpenAI-Beta": "assistants=v2",
             },
           });
+
           const messagesData = await messagesRes.json();
           const lastMessage = messagesData.data?.find(
             (msg: any) => msg.role === "assistant"
           );
 
-          let aiMessage = lastMessage?.content?.[0]?.text?.value || "";
+          let aiMessage =
+            lastMessage?.content?.[0]?.text?.value || "";
 
-          const responseTime = (Date.now() - startTime) / 1000;
+          // 🧠 Fallback auf Websuche bei schwacher Antwort
           const lower = aiMessage.toLowerCase();
-          const isWeak =
+          const triggersWebSearch =
+            !aiMessage ||
             aiMessage.length < 80 ||
             lower.includes("keine informationen") ||
             lower.includes("leider konnte ich") ||
-            lower.includes("ich bin mir nicht sicher") ||
             lower.includes("besuche die offizielle seite") ||
-            lower.includes("ich empfehle dir") ||
-            responseTime > 9;
+            lower.includes("ich bin mir nicht sicher");
 
-          // 🌐 Google-Suche bei schwacher Antwort
-          if (isWeak) {
+          if (triggersWebSearch) {
             console.log("🔍 Assistant-Antwort zu schwach → Starte Google-Suche...");
-            const webResults = await searchGoogle(userMessage);
+
+            const webResults = await searchGoogle(message);
+            console.log("🌐 Ergebnisse aus Websuche:", webResults);
+
             if (webResults.length > 0) {
-              // Neue Run mit Web-Snippets starten
-              const formattedContext = webResults.join("\n\n");
-
-              const followUpRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${apiKey}`,
-                  "OpenAI-Beta": "assistants=v2",
-                },
-                body: JSON.stringify({
-                  role: "user",
-                  content: `Nutze die folgenden Informationen aus einer Websuche als Kontext:\n\n${formattedContext}\n\nFrage: ${userMessage}`,
-                }),
-              });
-
-              const newRunRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${apiKey}`,
-                  "OpenAI-Beta": "assistants=v2",
-                },
-                body: JSON.stringify({
-                  assistant_id: assistantId,
-                }),
-              });
-
-              const newRunData = await newRunRes.json();
-              const newRunId = newRunData?.id;
-              if (newRunId) {
-                // Wieder auf Antwort warten
-                let followUpCompleted = false;
-                let followUpAttempts = 0;
-                while (!followUpCompleted && followUpAttempts < 10) {
-                  await new Promise((r) => setTimeout(r, 1000));
-                  const check = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs/${newRunId}`, {
-                    headers: {
-                      Authorization: `Bearer ${apiKey}`,
-                      "OpenAI-Beta": "assistants=v2",
-                    },
-                  });
-                  const status = await check.json();
-                  if (status.status === "completed") {
-                    followUpCompleted = true;
-                  }
-                  followUpAttempts++;
-                }
-
-                const newMessages = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
-                  headers: {
-                    Authorization: `Bearer ${apiKey}`,
-                    "OpenAI-Beta": "assistants=v2",
-                  },
-                });
-                const newData = await newMessages.json();
-                const newReply = newData.data?.find(
-                  (msg: any) => msg.role === "assistant"
-                );
-                aiMessage = newReply?.content?.[0]?.text?.value || aiMessage;
-              }
+              aiMessage = webResults.join("\n\n");
+              console.log("✅ Web-Ergebnisse übernommen.");
             } else {
-              aiMessage += "\n\n❗ Auch in der Websuche konnten keine verlässlichen Informationen gefunden werden.";
+              aiMessage = "❗ Keine passenden Informationen in der Websuche gefunden.";
             }
           }
 
@@ -240,8 +182,8 @@ const useOpenAIStore = create(
             ],
             typing: false,
           }));
-        } catch (err) {
-          console.error("❗ Fehler im Flow:", err);
+        } catch (error) {
+          console.error("❗ Fehler im Assistant-Flow:", error);
           set({ typing: false });
         }
       },
