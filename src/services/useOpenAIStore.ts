@@ -2,7 +2,7 @@ import { IDetailsWidget } from "@livechat/agent-app-sdk";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
 import removeMarkdown from "remove-markdown";
-import { searchGoogle } from "@/services/googleSearch"; // <– 🔄 angepasst
+import searchGoogle from "./googleSearch";
 
 const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY!;
 const assistantId = process.env.NEXT_PUBLIC_ASSISTANT_ID!;
@@ -93,7 +93,9 @@ const useOpenAIStore = create(
               Authorization: `Bearer ${apiKey}`,
               "OpenAI-Beta": "assistants=v2",
             },
-            body: JSON.stringify({ assistant_id: assistantId }),
+            body: JSON.stringify({
+              assistant_id: assistantId,
+            }),
           });
 
           const runData = await runRes.json();
@@ -102,6 +104,7 @@ const useOpenAIStore = create(
 
           let completed = false;
           let attempts = 0;
+          let result;
 
           while (!completed && attempts < 10) {
             await new Promise((r) => setTimeout(r, 1000));
@@ -115,13 +118,11 @@ const useOpenAIStore = create(
             const checkData = await checkRes.json();
             if (checkData.status === "completed") {
               completed = true;
-              break;
+              result = checkData;
             }
 
             attempts++;
           }
-
-          if (!completed) return;
 
           const messagesRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
             headers: {
@@ -131,15 +132,34 @@ const useOpenAIStore = create(
           });
 
           const messagesData = await messagesRes.json();
-          const lastMessage = messagesData.data?.find((msg: any) => msg.role === "assistant");
+          const lastMessage = messagesData.data?.find(
+            (msg: any) => msg.role === "assistant"
+          );
 
-          let aiMessage = lastMessage?.content?.[0]?.text?.value?.trim() || "";
+          const aiMessage = lastMessage?.content?.[0]?.text?.value || "";
 
-          // ❗ Falls keine Antwort vorliegt: Websuche als Fallback
-          if (!aiMessage || aiMessage.toLowerCase().includes("keine informationen")) {
-            const fallback = await searchGoogle(message);
-            aiMessage = fallback || "❗ Es konnte keine Antwort gefunden werden.";
+          if (aiMessage && aiMessage.trim() !== "Ich habe keine Informationen gefunden.") {
+            set((prev) => ({
+              chats: [
+                ...prev.chats,
+                {
+                  message: {
+                    data: {
+                      content: removeMarkdown(aiMessage),
+                      is_chunk: false,
+                      type: "ai",
+                    },
+                    type: "ai",
+                  },
+                },
+              ],
+              typing: false,
+            }));
+            return;
           }
+
+          // ❗ Websuche als Fallback
+          const webResult = await searchGoogle(message);
 
           set((prev) => ({
             chats: [
@@ -147,7 +167,7 @@ const useOpenAIStore = create(
               {
                 message: {
                   data: {
-                    content: removeMarkdown(aiMessage),
+                    content: removeMarkdown(webResult),
                     is_chunk: false,
                     type: "ai",
                   },
@@ -158,7 +178,7 @@ const useOpenAIStore = create(
             typing: false,
           }));
         } catch (error) {
-          console.error("❗ Unerwarteter Fehler:", error);
+          console.error("❗ Fehler im Assistant Flow", error);
           set({ typing: false });
         }
       },

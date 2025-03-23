@@ -1,22 +1,31 @@
-// src/services/googleSearch.ts
-const API_KEY = process.env.GOOGLE_CSE_API_KEY!;
-const CX = process.env.GOOGLE_CSE_CX!;
+const apiKey = process.env.NEXT_PUBLIC_GOOGLE_CSE_API_KEY!;
+const cx = process.env.NEXT_PUBLIC_GOOGLE_CSE_CX!;
 
-export async function searchGoogle(query: string) {
-  const url = `https://www.googleapis.com/customsearch/v1?key=${API_KEY}&cx=${CX}&q=${encodeURIComponent(query)}`;
+const searchGoogle = async (query: string): Promise<string> => {
+  try {
+    const res = await fetch(
+      `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(query)}`
+    );
 
-  const res = await fetch(url);
-  if (!res.ok) {
-    console.error("❌ Google Search API Error:", await res.text());
-    return [];
+    const data = await res.json();
+
+    if (!data.items || data.items.length === 0) {
+      return "🔎 Keine passenden Informationen in der Websuche gefunden.";
+    }
+
+    const topResults = data.items.slice(0, 3);
+    const resultText = topResults
+      .map(
+        (item: any) =>
+          `🔗 **${item.title}**\n${item.snippet}\n[Quelle anzeigen](${item.link})\n`
+      )
+      .join("\n\n");
+
+    return resultText;
+  } catch (error) {
+    console.error("❗ Fehler bei Google Websuche:", error);
+    return "❗ Es gab ein Problem bei der Websuche.";
   }
+};
 
-  const data = await res.json();
-  const results = data.items?.map((item: any) => ({
-    title: item.title,
-    snippet: item.snippet,
-    link: item.link,
-  })) ?? [];
-
-  return results;
-}
+export default searchGoogle;
