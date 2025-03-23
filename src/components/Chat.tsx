@@ -78,25 +78,36 @@ export default function Chat({ widget }: { widget: IDetailsWidget }) {
       <form
         className="chat-input-form"
         onSubmit={handleSubmit}
-        style={{ width: "100%", display: "flex", padding: "10px" }}
+        style={{
+          width: "100%",
+          display: "flex",
+          padding: "10px",
+          maxWidth: "100%",
+          alignItems: "flex-end",
+          gap: "10px",
+        }}
       >
         <textarea
           value={message}
           onChange={(e) => typeMessage(e.target.value)}
           placeholder="Deine Frage..."
           className="chat-input"
-          rows={3}
+          rows={1}
+          inputMode="text"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
           style={{
             flexGrow: 1,
             padding: "12px",
             borderRadius: "8px",
             border: "1px solid #ccc",
             fontSize: "14px",
-            marginRight: "10px",
             resize: "none",
+            overflow: "hidden",
             lineHeight: "1.4",
             maxHeight: "150px",
-            overflowY: "auto",
+            fontFamily: "inherit",
           }}
         />
         <button
@@ -112,6 +123,7 @@ export default function Chat({ widget }: { widget: IDetailsWidget }) {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+            minWidth: "44px",
           }}
           title="Absenden"
         >
