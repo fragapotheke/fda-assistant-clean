@@ -1,4 +1,3 @@
-// src/services/useOpenAIStore.ts
 import { IDetailsWidget } from "@livechat/agent-app-sdk";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
@@ -61,6 +60,7 @@ const useOpenAIStore = create(
         }));
 
         try {
+          // 🧵 Thread erstellen
           const threadRes = await fetch("https://api.openai.com/v1/threads", {
             method: "POST",
             headers: {
@@ -74,6 +74,7 @@ const useOpenAIStore = create(
           const threadId = threadData?.id;
           if (!threadId) return;
 
+          // 💬 Nachricht hinzufügen
           await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
             method: "POST",
             headers: {
@@ -87,6 +88,7 @@ const useOpenAIStore = create(
             }),
           });
 
+          // ▶️ Run starten
           const runRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
             method: "POST",
             headers: {
@@ -103,6 +105,7 @@ const useOpenAIStore = create(
           const runId = runData?.id;
           if (!runId) return;
 
+          // ⏳ Auf Completion warten
           let completed = false;
           let attempts = 0;
           let result;
@@ -126,12 +129,9 @@ const useOpenAIStore = create(
             attempts++;
           }
 
-          if (!completed) {
-            console.warn("⚠️ Run nicht abgeschlossen");
-            set({ typing: false });
-            return;
-          }
+          if (!completed) return;
 
+          // 📩 Nachrichten abrufen
           const messagesRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
             headers: {
               Authorization: `Bearer ${apiKey}`,
@@ -146,20 +146,21 @@ const useOpenAIStore = create(
 
           let aiMessage = lastMessage?.content?.[0]?.text?.value || "";
 
+          // 🔍 Websuche als Fallback bei unzureichender Antwort
           const lower = aiMessage.toLowerCase();
           const triggersWebSearch =
             !aiMessage ||
-            aiMessage.length < 60 ||
             lower.includes("keine informationen") ||
             lower.includes("leider konnte ich") ||
+            lower.includes("nicht finden") ||
             lower.includes("ich empfehle dir") ||
             lower.includes("besuche die offizielle seite") ||
             lower.includes("ich bin mir nicht sicher");
 
           if (triggersWebSearch) {
-            console.log("🔍 Trigger Websuche für:", message);
+            console.log("🔍 Starte Websuche als Fallback für:", message);
             const webResults = await searchGoogle(message);
-            console.log("🌐 Web-Ergebnisse:", webResults);
+            console.log("🌐 Ergebnisse aus Websuche:", webResults);
 
             if (webResults.length > 0) {
               aiMessage = webResults.join("\n\n");
@@ -167,8 +168,6 @@ const useOpenAIStore = create(
               aiMessage = "❗ Keine passenden Informationen in der Websuche gefunden.";
             }
           }
-
-          console.log("✅ Antwort wird angezeigt:", aiMessage);
 
           set((prev) => ({
             chats: [
