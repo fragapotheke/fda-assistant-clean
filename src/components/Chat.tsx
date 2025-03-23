@@ -81,9 +81,8 @@ export default function Chat({ widget }: { widget: IDetailsWidget }) {
         style={{
           width: "100%",
           display: "flex",
+          flexDirection: "column",
           padding: "10px",
-          maxWidth: "100%",
-          alignItems: "flex-end",
           gap: "10px",
         }}
       >
@@ -92,40 +91,32 @@ export default function Chat({ widget }: { widget: IDetailsWidget }) {
           onChange={(e) => typeMessage(e.target.value)}
           placeholder="Deine Frage..."
           className="chat-input"
-          rows={1}
+          rows={3}
           inputMode="text"
-          autoComplete="off"
-          autoCorrect="off"
-          spellCheck={false}
           style={{
-            flexGrow: 1,
             padding: "12px",
             borderRadius: "8px",
             border: "1px solid #ccc",
-            fontSize: "14px",
+            fontSize: "16px",
             resize: "none",
-            overflow: "hidden",
             lineHeight: "1.4",
             maxHeight: "150px",
-            fontFamily: "inherit",
+            overflowY: "auto",
+            paddingRight: "60px", // Platz für den früheren Button rechts
           }}
         />
         <button
           type="submit"
           style={{
-            padding: "10px",
+            padding: "10px 16px",
             borderRadius: "8px",
             border: "none",
             backgroundColor: "#fb4f39",
             color: "#fff",
             fontWeight: "bold",
             cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            minWidth: "44px",
+            alignSelf: "flex-start",
           }}
-          title="Absenden"
         >
           ➤
         </button>
