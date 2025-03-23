@@ -60,7 +60,7 @@ const useOpenAIStore = create(
         }));
 
         try {
-          // 🔁 1. Thread erstellen
+          // 🧵 Thread erstellen
           const threadRes = await fetch("https://api.openai.com/v1/threads", {
             method: "POST",
             headers: {
@@ -69,11 +69,12 @@ const useOpenAIStore = create(
               "OpenAI-Beta": "assistants=v2",
             },
           });
+
           const threadData = await threadRes.json();
           const threadId = threadData?.id;
-          if (!threadId) return;
+          if (!threadId) throw new Error("Kein Thread erstellt");
 
-          // ➕ 2. Nachricht hinzufügen
+          // 💬 Nachricht hinzufügen
           await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
             method: "POST",
             headers: {
@@ -87,7 +88,7 @@ const useOpenAIStore = create(
             }),
           });
 
-          // ▶️ 3. Assistant-Run starten
+          // ▶️ Run starten
           const runRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
             method: "POST",
             headers: {
@@ -102,11 +103,12 @@ const useOpenAIStore = create(
 
           const runData = await runRes.json();
           const runId = runData?.id;
-          if (!runId) return;
+          if (!runId) throw new Error("Kein Run gestartet");
 
-          // ⏳ 4. Auf Abschluss warten (max. 10s)
+          // ⏳ Warte max. 10s auf Abschluss
           let completed = false;
           let attempts = 0;
+          let result;
 
           while (!completed && attempts < 10) {
             await new Promise((r) => setTimeout(r, 1000));
@@ -119,51 +121,53 @@ const useOpenAIStore = create(
                 },
               }
             );
+
             const checkData = await checkRes.json();
             if (checkData.status === "completed") {
               completed = true;
+              result = checkData;
               break;
             }
+
             attempts++;
           }
 
-          if (!completed) return;
+          // 📩 Assistant-Antwort abrufen
+          const messagesRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "OpenAI-Beta": "assistants=v2",
+            },
+          });
 
-          // 📩 5. Antwort abrufen
-          const messagesRes = await fetch(
-            `https://api.openai.com/v1/threads/${threadId}/messages`,
-            {
-              headers: {
-                Authorization: `Bearer ${apiKey}`,
-                "OpenAI-Beta": "assistants=v2",
-              },
-            }
-          );
           const messagesData = await messagesRes.json();
           const lastMessage = messagesData.data?.find(
             (msg: any) => msg.role === "assistant"
           );
+
           let aiMessage = lastMessage?.content?.[0]?.text?.value || "";
 
-          // 📉 6. Qualität prüfen → Websuche starten, falls nötig
-          const shouldFallbackToGoogle = !aiMessage ||
+          // 🔍 Prüfe, ob Antwort unbrauchbar → Fallback auf Websuche
+          const isEmptyOrWeak =
+            !aiMessage ||
             aiMessage.length < 60 ||
-            aiMessage.toLowerCase().includes("keine information") ||
-            aiMessage.toLowerCase().includes("offizielle webseite") ||
-            aiMessage.toLowerCase().includes("leider konnte ich");
+            aiMessage.toLowerCase().includes("keine informationen") ||
+            aiMessage.toLowerCase().includes("leider konnte ich") ||
+            aiMessage.toLowerCase().includes("besuche die offizielle");
 
-          if (shouldFallbackToGoogle) {
-            console.log("🌍 Assistant-Antwort zu vage → Starte Google-Suche…");
+          if (isEmptyOrWeak) {
+            console.log("🧭 Fallback: Starte Google-Suche für:", message);
             const webResults = await searchGoogle(message);
 
             if (webResults.length > 0) {
               aiMessage = webResults.join("\n\n");
             } else {
-              aiMessage = "❗ Keine passenden Informationen in der Websuche gefunden.";
+              aiMessage =
+                "❗ Keine passenden Informationen in der Websuche gefunden.";
             }
           }
 
-          // ✅ 7. Antwort anzeigen
+          // ✅ Nachricht in Chat setzen
           set((prev) => ({
             chats: [
               ...prev.chats,
@@ -181,8 +185,24 @@ const useOpenAIStore = create(
             typing: false,
           }));
         } catch (error) {
-          console.error("❗ Fehler im Assistant/Websuche Flow:", error);
-          set({ typing: false });
+          console.error("❗ Fehler im Assistant-Flow:", error);
+          set({
+            chats: [
+              ...get().chats,
+              {
+                message: {
+                  data: {
+                    content:
+                      "❗ Es gab ein technisches Problem bei der Anfrage. Bitte versuche es später erneut.",
+                    is_chunk: false,
+                    type: "ai",
+                  },
+                  type: "ai",
+                },
+              },
+            ],
+            typing: false,
+          });
         }
       },
 
