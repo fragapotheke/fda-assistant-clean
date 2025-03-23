@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@livechat/agent-app-sdk": "^1.6.1",
+    "dotenv": "^16.4.7",
     "next": "14.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -19,7 +20,9 @@
   "devDependencies": {
     "@types/node": "22.13.11",
     "@types/react": "19.0.12",
-    "typescript": "^5.2.2"
+    "ts-node": "^10.9.2",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
   },
   "main": "index.js",
   "keywords": [],
