@@ -181,7 +181,7 @@ $background: #f7f7f7;
       padding: 10px;
       border-radius: 8px;
       border: 1px solid #ccc;
-      font-size: 14px;
+      font-size: 16px; // ✅ verhindert iOS-Zoom
       font-family: inherit;
       resize: none;
       overflow: hidden;
