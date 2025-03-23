@@ -60,7 +60,7 @@ const useOpenAIStore = create(
         }));
 
         try {
-          console.log("🧵 Starte neuen Assistant-Thread...");
+          // 🧵 Thread erstellen
           const threadRes = await fetch("https://api.openai.com/v1/threads", {
             method: "POST",
             headers: {
@@ -69,12 +69,11 @@ const useOpenAIStore = create(
               "OpenAI-Beta": "assistants=v2",
             },
           });
-
           const threadData = await threadRes.json();
           const threadId = threadData?.id;
-          if (!threadId) throw new Error("❌ Kein Thread erstellt");
+          if (!threadId) throw new Error("Thread konnte nicht erstellt werden");
 
-          console.log("📨 Sende Nutzernachricht an Assistant...");
+          // 📨 Nachricht senden
           await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
             method: "POST",
             headers: {
@@ -88,7 +87,7 @@ const useOpenAIStore = create(
             }),
           });
 
-          console.log("▶️ Starte Assistant-Run...");
+          // ▶️ Run starten
           const runRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
             method: "POST",
             headers: {
@@ -96,71 +95,67 @@ const useOpenAIStore = create(
               Authorization: `Bearer ${apiKey}`,
               "OpenAI-Beta": "assistants=v2",
             },
-            body: JSON.stringify({ assistant_id: assistantId }),
+            body: JSON.stringify({
+              assistant_id: assistantId,
+            }),
           });
-
           const runData = await runRes.json();
           const runId = runData?.id;
-          if (!runId) throw new Error("❌ Kein Run gestartet");
+          if (!runId) throw new Error("Run konnte nicht gestartet werden");
 
-          console.log("⏳ Warte auf Assistant-Antwort...");
+          // ⏳ Auf Completion warten (max. 10s)
           let completed = false;
           let attempts = 0;
+          let result;
 
-          while (!completed && attempts < 12) {
+          while (!completed && attempts < 10) {
             await new Promise((r) => setTimeout(r, 1000));
-            const statusRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs/${runId}`, {
+            const checkRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs/${runId}`, {
               headers: {
                 Authorization: `Bearer ${apiKey}`,
                 "OpenAI-Beta": "assistants=v2",
               },
             });
-
-            const statusData = await statusRes.json();
-            if (statusData.status === "completed") {
+            const checkData = await checkRes.json();
+            if (checkData.status === "completed") {
               completed = true;
+              result = checkData;
               break;
             }
-
             attempts++;
           }
 
-          let aiMessage = "";
-
-          if (completed) {
-            const messagesRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
-              headers: {
-                Authorization: `Bearer ${apiKey}`,
-                "OpenAI-Beta": "assistants=v2",
-              },
-            });
-
-            const messagesData = await messagesRes.json();
-            const lastMessage = messagesData.data?.find(
-              (msg: any) => msg.role === "assistant"
-            );
-
-            aiMessage = lastMessage?.content?.[0]?.text?.value?.trim() || "";
-          } else {
-            console.warn("⚠️ Timeout bei Assistant-Antwort");
-            aiMessage = "";
+          if (!completed) {
+            throw new Error("Antwortzeit überschritten");
           }
 
-          const shouldUseWebSearch =
-            !aiMessage ||
-            aiMessage.length < 50 ||
-            aiMessage.toLowerCase().includes("keine information") ||
-            aiMessage.toLowerCase().includes("leider konnte ich") ||
-            aiMessage.toLowerCase().includes("ich empfehle");
+          // 📩 Nachricht auslesen
+          const messagesRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "OpenAI-Beta": "assistants=v2",
+            },
+          });
+          const messagesData = await messagesRes.json();
+          const lastMessage = messagesData.data?.find(
+            (msg: any) => msg.role === "assistant"
+          );
 
-          if (shouldUseWebSearch) {
-            console.log("🔍 Assistant-Antwort war unzureichend → starte Google-Suche...");
-            const webResults = await searchGoogle(message);
+          let aiMessage = lastMessage?.content?.[0]?.text?.value || "";
 
-            if (webResults.length > 0) {
-              const webContext = webResults.join("\n\n");
+          // 📉 Antwortqualität bewerten
+          const isWeak =
+            aiMessage.length < 150 ||
+            aiMessage.toLowerCase().includes("keine informationen") ||
+            aiMessage.toLowerCase().includes("offizielle website") ||
+            aiMessage.toLowerCase().includes("leider konnte ich");
 
-              console.log("▶️ Starte zweiten Assistant-Run mit Webkontext...");
+          if (isWeak) {
+            const searchResults = await searchGoogle(message);
+            if (searchResults.length > 0) {
+              const context = searchResults.slice(0, 3).join("\n\n");
+
+              // ➕ Kontext aus Websuche hinzufügen
               await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
                 method: "POST",
                 headers: {
@@ -170,65 +165,56 @@ const useOpenAIStore = create(
                 },
                 body: JSON.stringify({
                   role: "user",
-                  content: `Nutze folgende Websuche als Kontext:\n\n${webContext}`,
+                  content: `Hier sind einige Web-Ergebnisse:\n\n${context}\n\nBitte beantworte die Frage erneut auf Basis dieser Informationen.`,
                 }),
               });
 
-              const runRes2 = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
+              const rerunRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
                   Authorization: `Bearer ${apiKey}`,
                   "OpenAI-Beta": "assistants=v2",
                 },
-                body: JSON.stringify({ assistant_id: assistantId }),
+                body: JSON.stringify({
+                  assistant_id: assistantId,
+                }),
               });
 
-              const runData2 = await runRes2.json();
-              const runId2 = runData2?.id;
-              if (!runId2) throw new Error("❌ Zweiter Run konnte nicht gestartet werden");
+              const rerunData = await rerunRes.json();
+              const rerunId = rerunData?.id;
 
-              // Wieder auf Antwort warten
-              completed = false;
-              attempts = 0;
+              // ⏳ Erneut auf Antwort warten
+              let rerunCompleted = false;
+              let rerunAttempts = 0;
 
-              while (!completed && attempts < 12) {
+              while (!rerunCompleted && rerunAttempts < 10) {
                 await new Promise((r) => setTimeout(r, 1000));
-                const checkRes2 = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs/${runId2}`, {
+                const statusRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs/${rerunId}`, {
                   headers: {
                     Authorization: `Bearer ${apiKey}`,
                     "OpenAI-Beta": "assistants=v2",
                   },
                 });
-
-                const checkData2 = await checkRes2.json();
-                if (checkData2.status === "completed") {
-                  completed = true;
-                  break;
+                const statusData = await statusRes.json();
+                if (statusData.status === "completed") {
+                  rerunCompleted = true;
                 }
-
-                attempts++;
+                rerunAttempts++;
               }
 
-              if (completed) {
-                const messagesRes2 = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
-                  headers: {
-                    Authorization: `Bearer ${apiKey}`,
-                    "OpenAI-Beta": "assistants=v2",
-                  },
-                });
+              const updatedMessages = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
+                headers: {
+                  Authorization: `Bearer ${apiKey}`,
+                  "OpenAI-Beta": "assistants=v2",
+                },
+              });
+              const updatedData = await updatedMessages.json();
+              const finalMessage = updatedData.data?.find(
+                (msg: any) => msg.role === "assistant"
+              );
 
-                const messagesData2 = await messagesRes2.json();
-                const lastMessage2 = messagesData2.data?.find(
-                  (msg: any) => msg.role === "assistant"
-                );
-
-                aiMessage = lastMessage2?.content?.[0]?.text?.value?.trim() || "";
-              } else {
-                aiMessage = "❗ Die Antwort konnte nicht vollständig generiert werden.";
-              }
-            } else {
-              aiMessage = "❗ Keine verwertbaren Web-Ergebnisse gefunden.";
+              aiMessage = finalMessage?.content?.[0]?.text?.value || aiMessage;
             }
           }
 
@@ -250,7 +236,23 @@ const useOpenAIStore = create(
           }));
         } catch (error) {
           console.error("❗ Fehler im Assistant-Flow:", error);
-          set({ typing: false });
+          set({
+            chats: [
+              ...get().chats,
+              {
+                message: {
+                  data: {
+                    content:
+                      "❗ Die Antwort konnte nicht geladen werden. Bitte versuche es erneut.",
+                    is_chunk: false,
+                    type: "ai",
+                  },
+                  type: "ai",
+                },
+              },
+            ],
+            typing: false,
+          });
         }
       },
 
