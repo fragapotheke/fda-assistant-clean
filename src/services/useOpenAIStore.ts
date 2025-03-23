@@ -1,3 +1,4 @@
+// src/services/useOpenAIStore.ts
 import { IDetailsWidget } from "@livechat/agent-app-sdk";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
@@ -60,7 +61,6 @@ const useOpenAIStore = create(
         }));
 
         try {
-          // Thread erstellen
           const threadRes = await fetch("https://api.openai.com/v1/threads", {
             method: "POST",
             headers: {
@@ -74,7 +74,6 @@ const useOpenAIStore = create(
           const threadId = threadData?.id;
           if (!threadId) return;
 
-          // Nachricht hinzufügen
           await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
             method: "POST",
             headers: {
@@ -88,7 +87,6 @@ const useOpenAIStore = create(
             }),
           });
 
-          // Run starten
           const runRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
             method: "POST",
             headers: {
@@ -105,7 +103,6 @@ const useOpenAIStore = create(
           const runId = runData?.id;
           if (!runId) return;
 
-          // Auf Completion warten
           let completed = false;
           let attempts = 0;
           let result;
@@ -129,9 +126,12 @@ const useOpenAIStore = create(
             attempts++;
           }
 
-          if (!completed) return;
+          if (!completed) {
+            console.warn("⚠️ Run nicht abgeschlossen");
+            set({ typing: false });
+            return;
+          }
 
-          // Nachrichten abrufen
           const messagesRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
             headers: {
               Authorization: `Bearer ${apiKey}`,
@@ -146,7 +146,6 @@ const useOpenAIStore = create(
 
           let aiMessage = lastMessage?.content?.[0]?.text?.value || "";
 
-          // Websuche als Fallback bei schwacher Antwort
           const lower = aiMessage.toLowerCase();
           const triggersWebSearch =
             !aiMessage ||
@@ -158,9 +157,9 @@ const useOpenAIStore = create(
             lower.includes("ich bin mir nicht sicher");
 
           if (triggersWebSearch) {
-            console.log("🔍 Starte Websuche als Fallback für:", message);
+            console.log("🔍 Trigger Websuche für:", message);
             const webResults = await searchGoogle(message);
-            console.log("🌐 Ergebnisse aus Websuche:", webResults);
+            console.log("🌐 Web-Ergebnisse:", webResults);
 
             if (webResults.length > 0) {
               aiMessage = webResults.join("\n\n");
@@ -168,6 +167,8 @@ const useOpenAIStore = create(
               aiMessage = "❗ Keine passenden Informationen in der Websuche gefunden.";
             }
           }
+
+          console.log("✅ Antwort wird angezeigt:", aiMessage);
 
           set((prev) => ({
             chats: [
