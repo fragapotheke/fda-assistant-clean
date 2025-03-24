@@ -1,8 +1,10 @@
+// src/services/useOpenAIStore.ts
+
 import { IDetailsWidget } from "@livechat/agent-app-sdk";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
 import removeMarkdown from "remove-markdown";
-import { searchGoogle } from "@/services/googleSearch";
+import { searchGoogleJSON as searchGoogle } from "@/services/googleSearch";
 
 const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY!;
 const assistantId = process.env.NEXT_PUBLIC_ASSISTANT_ID!;
@@ -41,6 +43,8 @@ const useOpenAIStore = create(
         const userMessage = get().message;
         if (!userMessage || !assistantId) return;
 
+        console.log("🧵 Starte neuen Assistant-Thread...");
+
         set((prev) => ({
           typing: true,
           chats: [
@@ -60,7 +64,6 @@ const useOpenAIStore = create(
         }));
 
         try {
-          console.log("🧵 Starte neuen Assistant-Thread...");
           const threadRes = await fetch("https://api.openai.com/v1/threads", {
             method: "POST",
             headers: {
@@ -107,12 +110,11 @@ const useOpenAIStore = create(
           const runId = runData?.id;
           if (!runId) throw new Error("Assistant-Run konnte nicht gestartet werden.");
 
+          // Assistant-Antwort abfragen mit Timeout
           let assistantMessage = "";
           let completed = false;
-          let attempts = 0;
-
-          while (!completed && attempts < 15) {
-            console.log(`⏳ Assistant-Run: Versuch ${attempts + 1}/15`);
+          for (let i = 1; i <= 15; i++) {
+            console.log(`⏳ Assistant-Run: Versuch ${i}/15`);
             await new Promise((r) => setTimeout(r, 1000));
             const checkRes = await fetch(
               `https://api.openai.com/v1/threads/${threadId}/runs/${runId}`,
@@ -128,7 +130,6 @@ const useOpenAIStore = create(
               completed = true;
               break;
             }
-            attempts++;
           }
 
           if (!completed) throw new Error("Run wurde nicht rechtzeitig abgeschlossen");
@@ -144,8 +145,12 @@ const useOpenAIStore = create(
           );
 
           const messagesData = await messagesRes.json();
-          const lastMessage = messagesData.data?.find((msg: any) => msg.role === "assistant");
+          const lastMessage = messagesData.data?.find(
+            (msg: any) => msg.role === "assistant"
+          );
+
           assistantMessage = lastMessage?.content?.[0]?.text?.value || "";
+
           console.log("🤖 Assistant-Antwort:", assistantMessage);
 
           const googleResults = await googlePromise;
@@ -154,17 +159,17 @@ const useOpenAIStore = create(
           const isWeak =
             !assistantMessage ||
             assistantMessage.length < 100 ||
+            assistantMessage.toLowerCase().includes("nicht gefunden") ||
             assistantMessage.toLowerCase().includes("keine informationen") ||
             assistantMessage.toLowerCase().includes("offizielle website") ||
-            assistantMessage.toLowerCase().includes("nicht gefunden") ||
-            assistantMessage.toLowerCase().includes("ich bin mir nicht sicher");
+            assistantMessage.toLowerCase().includes("produktbeschreibung");
 
           let finalAnswer = assistantMessage;
 
           if (isWeak && googleResults.length > 0) {
             console.log("↩️ Assistant-Antwort zu schwach – starte neuen Assistant-Run mit JSON-Kontext...");
 
-            const secondThreadRes = await fetch("https://api.openai.com/v1/threads", {
+            const newThreadRes = await fetch("https://api.openai.com/v1/threads", {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -172,19 +177,10 @@ const useOpenAIStore = create(
                 "OpenAI-Beta": "assistants=v2",
               },
             });
-            const secondThread = await secondThreadRes.json();
+            const newThreadData = await newThreadRes.json();
+            const newThreadId = newThreadData?.id;
 
-            const prompt = `Bitte beantworte folgende Frage anhand der untenstehenden Web-Ergebnisse.
-            
-Frage: ${userMessage}
-
-🔍 Web-Ergebnisse:
-${googleResults.slice(0, 3).join("\n\n")}
-
-👉 Wenn nach Inhaltsstoffen, Zusammensetzung oder Produktdetails gefragt wird, gib die Informationen in einer klaren Liste aus. Bei medizinischen oder therapeutischen Fragen erkläre laienverständlich.
-❗ Antworte nur, wenn die Informationen in den Ergebnissen wirklich enthalten und belastbar sind.`;
-
-            await fetch(`https://api.openai.com/v1/threads/${secondThread.id}/messages`, {
+            await fetch(`https://api.openai.com/v1/threads/${newThreadId}/messages`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -193,12 +189,14 @@ ${googleResults.slice(0, 3).join("\n\n")}
               },
               body: JSON.stringify({
                 role: "user",
-                content: prompt,
+                content: `Frage: ${userMessage}\n\nNutze die folgenden strukturierten Informationen aus Webquellen als Kontext:\n\n${googleResults
+                  .slice(0, 3)
+                  .join("\n\n")}\n\nAntworte bitte strukturiert und klar verständlich.`,
               }),
             });
 
             const secondRunRes = await fetch(
-              `https://api.openai.com/v1/threads/${secondThread.id}/runs`,
+              `https://api.openai.com/v1/threads/${newThreadId}/runs`,
               {
                 method: "POST",
                 headers: {
@@ -214,14 +212,12 @@ ${googleResults.slice(0, 3).join("\n\n")}
 
             const secondRunData = await secondRunRes.json();
             const secondRunId = secondRunData?.id;
-            let secondCompleted = false;
-            let secondAttempts = 0;
 
-            while (!secondCompleted && secondAttempts < 20) {
-              console.log(`⏳ Zweiter Assistant-Run: Versuch ${secondAttempts + 1}/20`);
+            for (let i = 1; i <= 15; i++) {
+              console.log(`⏳ Zweiter Assistant-Run: Versuch ${i}/15`);
               await new Promise((r) => setTimeout(r, 1000));
               const check = await fetch(
-                `https://api.openai.com/v1/threads/${secondThread.id}/runs/${secondRunId}`,
+                `https://api.openai.com/v1/threads/${newThreadId}/runs/${secondRunId}`,
                 {
                   headers: {
                     Authorization: `Bearer ${apiKey}`,
@@ -230,14 +226,11 @@ ${googleResults.slice(0, 3).join("\n\n")}
                 }
               );
               const checkData = await check.json();
-              if (checkData.status === "completed") {
-                secondCompleted = true;
-              }
-              secondAttempts++;
+              if (checkData.status === "completed") break;
             }
 
-            const finalMessagesRes = await fetch(
-              `https://api.openai.com/v1/threads/${secondThread.id}/messages`,
+            const finalMessages = await fetch(
+              `https://api.openai.com/v1/threads/${newThreadId}/messages`,
               {
                 headers: {
                   Authorization: `Bearer ${apiKey}`,
@@ -246,8 +239,10 @@ ${googleResults.slice(0, 3).join("\n\n")}
               }
             );
 
-            const finalMessagesData = await finalMessagesRes.json();
-            const finalMsg = finalMessagesData.data?.find((msg: any) => msg.role === "assistant");
+            const finalMessagesData = await finalMessages.json();
+            const finalMsg = finalMessagesData.data?.find(
+              (msg: any) => msg.role === "assistant"
+            );
             finalAnswer = finalMsg?.content?.[0]?.text?.value || finalAnswer;
           }
 
@@ -276,7 +271,8 @@ ${googleResults.slice(0, 3).join("\n\n")}
               {
                 message: {
                   data: {
-                    content: "❗ Die Antwort konnte nicht geladen werden. Bitte versuche es erneut.",
+                    content:
+                      "❗ Die Antwort konnte nicht geladen werden. Bitte versuche es erneut.",
                     type: "ai",
                     is_chunk: false,
                   },
