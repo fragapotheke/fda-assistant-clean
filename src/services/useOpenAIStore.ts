@@ -111,8 +111,8 @@ const useOpenAIStore = create(
           let completed = false;
           let attempts = 0;
 
-          while (!completed && attempts < 20) {
-            console.log(`⏳ Assistant-Run: Versuch ${attempts + 1}/20`);
+          while (!completed && attempts < 15) {
+            console.log(`⏳ Assistant-Run: Versuch ${attempts + 1}/15`);
             await new Promise((r) => setTimeout(r, 1000));
             const checkRes = await fetch(
               `https://api.openai.com/v1/threads/${threadId}/runs/${runId}`,
