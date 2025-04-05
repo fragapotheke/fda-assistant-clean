@@ -10,12 +10,6 @@ const assistantId = process.env.NEXT_PUBLIC_ASSISTANT_ID!;
 export type Chats = Chat[];
 export type ChatType = "ai" | "human";
 
-export interface MessageData {
-  content: string;
-  is_chunk: boolean;
-  type: ChatType;
-}
-
 export interface Chat {
   message: Message;
 }
@@ -27,6 +21,12 @@ export interface Message {
   example?: boolean;
   is_chunk?: boolean;
   additional_kwargs?: AdditionalKwargs;
+}
+
+export interface MessageData {
+  content: string;
+  is_chunk: boolean;
+  type: ChatType;
 }
 
 export interface AdditionalKwargs {}
@@ -79,6 +79,7 @@ const useOpenAIStore = create(
           {
             message: {
               data: { content: message, is_chunk: false, type: "human" },
+              content: message,
               type: "human",
             },
           },
@@ -111,6 +112,7 @@ const useOpenAIStore = create(
                     is_chunk: false,
                     type: "ai",
                   },
+                  content: removeMarkdown(vectorAnswer + "\n\nQuelle: Datenbank"),
                   type: "ai",
                 },
               },
@@ -129,6 +131,7 @@ const useOpenAIStore = create(
                     is_chunk: false,
                     type: "ai",
                   },
+                  content: removeMarkdown(gptAnswer + "\n\nQuelle: Google"),
                   type: "ai",
                 },
               },
@@ -156,6 +159,7 @@ const useOpenAIStore = create(
           {
             message: {
               data: { content: message, is_chunk: false, type: "human" },
+              content: message,
               type: "human",
             },
           },
@@ -183,6 +187,7 @@ const useOpenAIStore = create(
                   is_chunk: false,
                   type: "ai",
                 },
+                content: removeMarkdown(gptAnswer + "\n\nQuelle: Google"),
                 type: "ai",
               },
             },
