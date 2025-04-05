@@ -3,7 +3,7 @@ import { create } from "zustand";
 import { combine } from "zustand/middleware";
 import removeMarkdown from "remove-markdown";
 import { searchGoogle, searchIngredientsOnly } from "./googleSearch";
-import { scrapeMultiplePages } from "../server/scrapePages"; // ggf. Pfad anpassen bei Bedarf
+import { scrapeMultiplePages } from "@/server/scrapePages"; // ✅ korrigierter Pfad
 
 const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY!;
 const assistantId = process.env.NEXT_PUBLIC_ASSISTANT_ID!;
