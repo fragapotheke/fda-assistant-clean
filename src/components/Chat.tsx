@@ -5,11 +5,16 @@ import useOpenAIStore from "@/services/useOpenAIStore";
 import { IDetailsWidget } from "@livechat/agent-app-sdk";
 
 export default function Chat({ widget }: { widget: IDetailsWidget }) {
-  const { chats, typing, message, typeMessage, getMessage } = useOpenAIStore();
+  const { chats, typing, message, typeMessage, getSmartAnswer, getIngredientsAnswer } = useOpenAIStore();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await getMessage(widget);
+    await getSmartAnswer(widget);
+  };
+
+  const handleIngredientsClick = async () => {
+    if (!message.trim()) return;
+    await getIngredientsAnswer(widget);
   };
 
   const handleCopy = (text: string) => {
@@ -102,24 +107,40 @@ export default function Chat({ widget }: { widget: IDetailsWidget }) {
             lineHeight: "1.4",
             maxHeight: "150px",
             overflowY: "auto",
-            paddingRight: "60px", // Platz für den früheren Button rechts
+            paddingRight: "60px",
           }}
         />
-        <button
-          type="submit"
-          style={{
-            padding: "10px 16px",
-            borderRadius: "8px",
-            border: "none",
-            backgroundColor: "#fb4f39",
-            color: "#fff",
-            fontWeight: "bold",
-            cursor: "pointer",
-            alignSelf: "flex-start",
-          }}
-        >
-          ➤
-        </button>
+        <div style={{ display: "flex", gap: "10px" }}>
+          <button
+            type="submit"
+            style={{
+              padding: "10px 16px",
+              borderRadius: "8px",
+              border: "none",
+              backgroundColor: "#fb4f39",
+              color: "#fff",
+              fontWeight: "bold",
+              cursor: "pointer",
+            }}
+          >
+            ➤
+          </button>
+          <button
+            type="button"
+            onClick={handleIngredientsClick}
+            style={{
+              padding: "10px 16px",
+              borderRadius: "8px",
+              border: "none",
+              backgroundColor: "#2c7a7b",
+              color: "#fff",
+              fontWeight: "bold",
+              cursor: "pointer",
+            }}
+          >
+            Inhaltsstoffe
+          </button>
+        </div>
       </form>
     </div>
   );

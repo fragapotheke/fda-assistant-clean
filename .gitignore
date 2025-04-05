@@ -2,4 +2,6 @@ node_modules
 .env.local
 .next
 dist
+.DS_Store.DS_Store
+.DS_Store
 .DS_Store
