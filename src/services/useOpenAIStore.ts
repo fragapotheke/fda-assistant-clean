@@ -10,6 +10,12 @@ const assistantId = process.env.NEXT_PUBLIC_ASSISTANT_ID!;
 export type Chats = Chat[];
 export type ChatType = "ai" | "human";
 
+export interface MessageData {
+  content: string;
+  is_chunk: boolean;
+  type: ChatType;
+}
+
 export interface Chat {
   message: Message;
 }
