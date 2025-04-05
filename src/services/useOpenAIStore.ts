@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { combine } from "zustand/middleware";
 import removeMarkdown from "remove-markdown";
 import { searchGoogle, searchIngredientsOnly } from "./googleSearch";
+import { scrapeMultiplePages } from "../server/scrapePages"; // ggf. Pfad anpassen bei Bedarf
 
 const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY!;
 const assistantId = process.env.NEXT_PUBLIC_ASSISTANT_ID!;
@@ -344,10 +345,13 @@ async function runVectorSearch(message: string): Promise<string> {
   return lastMessage?.content?.[0]?.text?.value || "❌ Keine Antwort von Assistant erhalten.";
 }
 
-// Google-Suche Standard
+// Google-Suche mit Playwright statt Snippets
 async function runGoogleSearch(message: string): Promise<string> {
   const results = await searchGoogle(message);
-  return results
-    .map((r, i) => `🔎 Ergebnis ${i + 1}:\n${r.title}\n${r.snippet}\n${r.url}`)
+  const urls = results.map((r) => r.url);
+  const fullTexts = await scrapeMultiplePages(urls);
+
+  return fullTexts
+    .map((text, i) => `📄 Seite ${i + 1}:\n🔗 ${urls[i]}\n${text.slice(0, 2000)}...`)
     .join("\n\n");
 }
