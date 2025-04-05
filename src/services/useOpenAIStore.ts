@@ -3,7 +3,6 @@ import { create } from "zustand";
 import { combine } from "zustand/middleware";
 import removeMarkdown from "remove-markdown";
 import { searchGoogle, searchIngredientsOnly } from "./googleSearch";
-import { scrapeMultiplePages } from "@/server/scrapePages"; // ✅ korrigierter Pfad
 
 const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY!;
 const assistantId = process.env.NEXT_PUBLIC_ASSISTANT_ID!;
@@ -345,13 +344,30 @@ async function runVectorSearch(message: string): Promise<string> {
   return lastMessage?.content?.[0]?.text?.value || "❌ Keine Antwort von Assistant erhalten.";
 }
 
-// Google-Suche mit Playwright statt Snippets
+// Google-Suche mit Scraping über API-Route
 async function runGoogleSearch(message: string): Promise<string> {
   const results = await searchGoogle(message);
   const urls = results.map((r) => r.url);
-  const fullTexts = await scrapeMultiplePages(urls);
+  const fullTexts = await fetchScrapedPagesFromAPI(urls);
 
   return fullTexts
     .map((text, i) => `📄 Seite ${i + 1}:\n🔗 ${urls[i]}\n${text.slice(0, 2000)}...`)
     .join("\n\n");
+}
+
+// Aufruf der Scrape-API mit URLs
+async function fetchScrapedPagesFromAPI(urls: string[]): Promise<string[]> {
+  try {
+    const res = await fetch("/api/scrape", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ urls }),
+    });
+
+    const data = await res.json();
+    return data.results || [];
+  } catch (error) {
+    console.error("❗ Fehler beim Abrufen gescrapter Inhalte:", error);
+    return urls.map(() => "❌ Scraping fehlgeschlagen");
+  }
 }
