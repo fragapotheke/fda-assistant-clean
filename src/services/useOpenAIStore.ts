@@ -143,7 +143,10 @@ const useOpenAIStore = create(
         const { results } = await response.json();
         const scrapedText = results?.join("\n\n") || "❌ Keine Inhalte gefunden.";
 
-        const gptAnswer = await runAssistantWithGoogle(message, scrapedText);
+        const gptAnswer = await runAssistantWithGoogle(
+          "Formatiere folgenden Text optisch ansprechend – mit Fettschrift für Wirk- und Hilfsstoffe. Gib keine zusätzliche Erklärung.",
+          scrapedText
+        );
 
         set((prev) => ({
           chats: [
@@ -171,7 +174,7 @@ const useOpenAIStore = create(
 
 export default useOpenAIStore;
 
-async function runAssistantWithGoogle(userMessage: string, googleResults: string): Promise<string> {
+async function runAssistantWithGoogle(userMessage: string, context: string): Promise<string> {
   const threadRes = await fetch("https://api.openai.com/v1/threads", {
     method: "POST",
     headers: {
@@ -192,7 +195,7 @@ async function runAssistantWithGoogle(userMessage: string, googleResults: string
     },
     body: JSON.stringify({
       role: "user",
-      content: `Bitte beantworte folgende Frage auf Basis dieser Google-Ergebnisse:\n\n${googleResults}\n\nFrage: ${userMessage}`,
+      content: `${userMessage}\n\n${context}`,
     }),
   });
 
