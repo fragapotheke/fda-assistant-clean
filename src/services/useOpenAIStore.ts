@@ -46,7 +46,7 @@ function isAnswerStrong(text: string): boolean {
     "bei weiteren fragen",
     "lassen sie es mich wissen",
     "empfehle ich",
-    "wenn sie spezifische informationen"
+    "wenn sie spezifische informationen",
   ];
   const textLower = text.toLowerCase();
   return !schwachePhrasen.some((phrase) => textLower.includes(phrase));
@@ -170,6 +170,7 @@ const useOpenAIStore = create(
       try {
         const spezialResults = await searchIngredientsOnly(message);
         const urls = spezialResults.map((r) => r.url);
+        console.log("🔗 URLs für Inhaltsstoffe:", urls);
 
         const baseUrl =
           typeof window === "undefined"
@@ -183,8 +184,9 @@ const useOpenAIStore = create(
         });
 
         const data = await res.json();
-        const extracted = data.results?.join("\n\n") || "❌ Keine Stoffe gefunden.";
+        console.log("📥 Gescrapte Inhaltsstoffdaten:", data);
 
+        const extracted = data.results?.join("\n\n") || "❌ Keine spezifischen Stoffe gefunden.";
         const gptAnswer = await runAssistantWithGoogle(message, extracted);
 
         set((prev) => ({
@@ -216,6 +218,8 @@ export default useOpenAIStore;
 
 // GPT mit Google-Ergebnissen
 async function runAssistantWithGoogle(userMessage: string, googleResults: string): Promise<string> {
+  console.log("📤 runAssistantWithGoogle:", { userMessage, googleResults });
+
   const threadRes = await fetch("https://api.openai.com/v1/threads", {
     method: "POST",
     headers: {
@@ -282,7 +286,13 @@ async function runAssistantWithGoogle(userMessage: string, googleResults: string
 
   const messagesData = await messagesRes.json();
   const lastMessage = messagesData.data?.find((msg: any) => msg.role === "assistant");
-  const rawAnswer = lastMessage?.content?.[0]?.text?.value || "❌ Keine GPT-Antwort.";
+  const rawAnswer = lastMessage?.content?.[0]?.text?.value;
+
+  if (!rawAnswer) {
+    console.warn("⚠️ Keine GPT-Antwort erhalten!");
+    return "❌ Keine GPT-Antwort.";
+  }
+
   return cleanGptArtifacts(rawAnswer);
 }
 
@@ -354,7 +364,7 @@ async function runVectorSearch(message: string): Promise<string> {
   return lastMessage?.content?.[0]?.text?.value || "❌ Keine Antwort von Assistant erhalten.";
 }
 
-// Scraping via API für allgemeine Suche
+// Klassische Volltextsuche
 async function runGoogleSearch(message: string): Promise<string> {
   const results = await searchGoogle(message);
   const urls = results.map((r) => r.url);
