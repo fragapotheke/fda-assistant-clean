@@ -1,3 +1,5 @@
+// src/services/useOpenAIStore.ts
+
 import { IDetailsWidget } from "@livechat/agent-app-sdk";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
@@ -141,7 +143,7 @@ const useOpenAIStore = create(
         const { results } = await response.json();
         const scrapedText = results?.join("\n\n") || "❌ Keine Inhalte gefunden.";
 
-        const gptAnswer = await runAssistantWithGoogle(message, scrapedText, true);
+        const gptAnswer = await runAssistantWithGoogle(message, scrapedText);
 
         set((prev) => ({
           chats: [
@@ -169,7 +171,19 @@ const useOpenAIStore = create(
 
 export default useOpenAIStore;
 
-async function runAssistantWithGoogle(userMessage: string, googleResults: string, isIngredientsSearch = false): Promise<string> {
+// 🧠 GPT-Antwort mit gezieltem Prompt für Inhaltsstoffe
+async function runAssistantWithGoogle(userMessage: string, googleResults: string): Promise<string> {
+  // 🔎 Nur relevante Abschnitte extrahieren
+  const relevantPart = googleResults
+    .split("\n")
+    .filter((line) =>
+      /inhaltsstoff|hilfsstoff|wirkstoff/i.test(line)
+    )
+    .join("\n")
+    .slice(0, 4000); // Sicherheitslimit
+
+  const prompt = `Extrahiere ausschließlich die Inhaltsstoffe aus dem folgenden Text. Gib eine strukturierte Liste mit den Wirkstoffen und Hilfsstoffen aus. Keine weiteren Erklärungen oder Hinweise.\n\n${relevantPart}`;
+
   const threadRes = await fetch("https://api.openai.com/v1/threads", {
     method: "POST",
     headers: {
@@ -180,23 +194,6 @@ async function runAssistantWithGoogle(userMessage: string, googleResults: string
   });
 
   const threadId = (await threadRes.json()).id;
-
-  const prompt = isIngredientsSearch
-    ? `Extrahiere ausschließlich die Wirkstoffe und Hilfsstoffe für das folgende Arzneimittel, sofern die Informationen in den folgenden Webseiten vorkommen. Gib ausschließlich eine strukturierte Liste aus:
-
-Arzneimittel: ${userMessage}
-
-🔎 Durchsuchbare Inhalte:
-${googleResults}
-
-⚠️ Wichtig:
-- Ignoriere Inhalte zu anderen Produkten.
-- Wenn keine passenden Angaben enthalten sind, schreibe: "Keine genauen Angaben zu Wirkstoffen oder Hilfsstoffen gefunden."
-- Antworte nicht mit allgemeinen Hinweisen wie „fragen Sie Ihren Arzt“ oder „siehe Packungsbeilage“.
-- Gliedere die Ausgabe in zwei Abschnitte:
-  • Wirkstoffe
-  • Hilfsstoffe`
-    : `Bitte beantworte folgende Frage auf Basis dieser Google-Ergebnisse:\n\n${googleResults}\n\nFrage: ${userMessage}`;
 
   await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
     method: "POST",
