@@ -6,6 +6,7 @@ import { searchGoogle, searchIngredientsOnly } from "./googleSearch";
 
 const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY!;
 const assistantId = process.env.NEXT_PUBLIC_ASSISTANT_ID!;
+const scraperUrl = "https://playwright-scraper-488669130320.europe-west1.run.app/scrape";
 
 export type Chats = Chat[];
 export type ChatType = "ai" | "human";
@@ -33,26 +34,16 @@ export interface AdditionalKwargs {}
 
 function isAnswerStrong(text: string): boolean {
   const schwachePhrasen = [
-    "könnte enthalten",
-    "je nach hersteller",
-    "kann variieren",
-    "typische inhaltsstoffe",
-    "eventuell",
-    "es ist wichtig zu beachten",
-    "lesen sie die packungsbeilage",
-    "hilfsstoffe sind in der regel",
-    "in der regel",
-    "gehört zur gruppe der nsar",
-    "bei weiteren fragen",
-    "lassen sie es mich wissen",
-    "empfehle ich",
-    "wenn sie spezifische informationen",
+    "könnte enthalten", "je nach hersteller", "kann variieren",
+    "typische inhaltsstoffe", "eventuell", "es ist wichtig zu beachten",
+    "lesen sie die packungsbeilage", "hilfsstoffe sind in der regel",
+    "in der regel", "gehört zur gruppe der nsar", "bei weiteren fragen",
+    "lassen sie es mich wissen", "empfehle ich", "wenn sie spezifische informationen"
   ];
   const textLower = text.toLowerCase();
   return !schwachePhrasen.some((phrase) => textLower.includes(phrase));
 }
 
-// Entfernt OpenAI-Marker wie   ohne andere Inhalte zu beeinträchtigen
 function cleanGptArtifacts(text: string): string {
   return text.replace(/【\d+:\d+†source】/g, "").trim();
 }
@@ -96,9 +87,7 @@ const useOpenAIStore = create(
 
         const answer = isStrong
           ? cleanGptArtifacts(removeMarkdown(vectorAnswer)) + "\n\nQuelle: Datenbank"
-          : cleanGptArtifacts(
-              removeMarkdown(await runAssistantWithGoogle(message, googleAnswer || ""))
-            ) + "\n\nQuelle: Google";
+          : cleanGptArtifacts(removeMarkdown(await runAssistantWithGoogle(message, googleAnswer || ""))) + "\n\nQuelle: Google";
 
         set((prev) => ({
           chats: [
@@ -141,11 +130,18 @@ const useOpenAIStore = create(
 
       try {
         const spezialResults = await searchIngredientsOnly(message);
-        const googleFormatted = spezialResults
-          .map((r, i) => `🔎 Ergebnis ${i + 1}:\n${r.title}\n${r.snippet}\n${r.url}`)
-          .join("\n\n");
+        const urls = spezialResults.map((r) => r.url);
 
-        const gptAnswer = await runAssistantWithGoogle(message, googleFormatted);
+        const response = await fetch(scraperUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ urls }),
+        });
+
+        const { results } = await response.json();
+        const scrapedText = results?.join("\n\n") || "❌ Keine Inhalte gefunden.";
+
+        const gptAnswer = await runAssistantWithGoogle(message, scrapedText);
 
         set((prev) => ({
           chats: [
@@ -153,13 +149,11 @@ const useOpenAIStore = create(
             {
               message: {
                 data: {
-                  content:
-                    cleanGptArtifacts(removeMarkdown(gptAnswer)) + "\n\nQuelle: Google",
+                  content: cleanGptArtifacts(removeMarkdown(gptAnswer)) + "\n\nQuelle: Google",
                   is_chunk: false,
                   type: "ai",
                 },
-                content:
-                  cleanGptArtifacts(removeMarkdown(gptAnswer)) + "\n\nQuelle: Google",
+                content: cleanGptArtifacts(removeMarkdown(gptAnswer)) + "\n\nQuelle: Google",
                 type: "ai",
               },
             },
@@ -217,15 +211,13 @@ async function runAssistantWithGoogle(userMessage: string, googleResults: string
 
   while (!completed && attempts < 15) {
     await new Promise((r) => setTimeout(r, 1000));
-    const res = await fetch(
-      `https://api.openai.com/v1/threads/${threadId}/runs/${runId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "OpenAI-Beta": "assistants=v2",
-        },
-      }
-    );
+    const res = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs/${runId}`, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "OpenAI-Beta": "assistants=v2",
+      },
+    });
+
     if ((await res.json()).status === "completed") completed = true;
     attempts++;
   }
@@ -243,16 +235,16 @@ async function runAssistantWithGoogle(userMessage: string, googleResults: string
 }
 
 async function runVectorSearch(message: string): Promise<string> {
-  const threadId = (await (
-    await fetch("https://api.openai.com/v1/threads", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-        "OpenAI-Beta": "assistants=v2",
-      },
-    })
-  ).json()).id;
+  const threadRes = await fetch("https://api.openai.com/v1/threads", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+      "OpenAI-Beta": "assistants=v2",
+    },
+  });
+
+  const threadId = (await threadRes.json()).id;
 
   await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
     method: "POST",
@@ -264,31 +256,29 @@ async function runVectorSearch(message: string): Promise<string> {
     body: JSON.stringify({ role: "user", content: message }),
   });
 
-  const runId = (await (
-    await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-        "OpenAI-Beta": "assistants=v2",
-      },
-      body: JSON.stringify({ assistant_id: assistantId }),
-    })
-  ).json()).id;
+  const runRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+      "OpenAI-Beta": "assistants=v2",
+    },
+    body: JSON.stringify({ assistant_id: assistantId }),
+  });
+
+  const runId = (await runRes.json()).id;
 
   let completed = false;
   let attempts = 0;
   while (!completed && attempts < 15) {
     await new Promise((r) => setTimeout(r, 1000));
-    const res = await fetch(
-      `https://api.openai.com/v1/threads/${threadId}/runs/${runId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "OpenAI-Beta": "assistants=v2",
-        },
-      }
-    );
+    const res = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs/${runId}`, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "OpenAI-Beta": "assistants=v2",
+      },
+    });
+
     if ((await res.json()).status === "completed") completed = true;
     attempts++;
   }
@@ -307,7 +297,22 @@ async function runVectorSearch(message: string): Promise<string> {
 
 async function runGoogleSearch(message: string): Promise<string> {
   const results = await searchGoogle(message);
-  return results
-    .map((r, i) => `📄 Seite ${i + 1}:\n${r.title}\n${r.snippet}\n🔗 ${r.url}`)
-    .join("\n\n");
+  const urls = results.map((r) => r.url);
+
+  try {
+    const res = await fetch(scraperUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ urls }),
+    });
+
+    const { results: fullTexts } = await res.json();
+
+    return fullTexts
+      .map((text, i) => `📄 Seite ${i + 1}:\n🔗 ${urls[i]}\n${text.slice(0, 2000)}...`)
+      .join("\n\n");
+  } catch (err) {
+    console.error("❗ Fehler bei externem Scraping:", err);
+    return "❌ Scraping fehlgeschlagen.";
+  }
 }
