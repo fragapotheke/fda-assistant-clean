@@ -28,10 +28,9 @@ export async function searchGoogle(query: string): Promise<GoogleResult[]> {
   }));
 }
 
-// 🌿 Spezialsuche NUR auf ihreapotheken.de
-export async function searchIngredientsOnly(query: string): Promise<GoogleResult[]> {
-  const spezialQuery = `${query} Inhaltsstoffe site:ihreapotheken.de`;
-
+// 🌿 Spezialsuche NUR auf ihreapotheken.de (für Inhaltsstoffe)
+export async function searchIngredientsOnly(productName: string): Promise<GoogleResult[]> {
+  const spezialQuery = `site:ihreapotheken.de inurl:/produkt/ "${productName}" Inhaltsstoffe`;
   const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(spezialQuery)}`;
 
   const res = await fetch(url);
@@ -42,9 +41,13 @@ export async function searchIngredientsOnly(query: string): Promise<GoogleResult
     return [];
   }
 
-  return data.items.slice(0, 3).map((item: any) => ({
+  const results = data.items.slice(0, 3).map((item: any) => ({
     title: item.title,
     snippet: item.snippet,
     url: item.link,
   }));
+
+  console.log("🔍 Inhaltsstoff-Suche – Google-Treffer:", results.map(r => r.url));
+
+  return results;
 }
