@@ -1,3 +1,5 @@
+// src/services/useOpenAIStore.ts
+
 import { IDetailsWidget } from "@livechat/agent-app-sdk";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
@@ -169,6 +171,7 @@ const useOpenAIStore = create(
 
 export default useOpenAIStore;
 
+// GPT-Antwort mit optionalem Inhaltsstoff-Modus
 async function runAssistantWithGoogle(userMessage: string, googleResults: string): Promise<string> {
   const threadRes = await fetch("https://api.openai.com/v1/threads", {
     method: "POST",
@@ -181,6 +184,14 @@ async function runAssistantWithGoogle(userMessage: string, googleResults: string
 
   const threadId = (await threadRes.json()).id;
 
+  const isIngredientQuestion = userMessage.toLowerCase().includes("inhaltsstoffe");
+
+  const prompt = isIngredientQuestion
+    ? `Bitte extrahiere ausschließlich die Wirkstoffe und Hilfsstoffe aus folgendem Text und stelle sie strukturiert dar. Liste zuerst die Wirkstoffe, dann die Hilfsstoffe.
+
+${googleResults}`
+    : `Bitte beantworte folgende Frage auf Basis dieser Google-Ergebnisse:\n\n${googleResults}\n\nFrage: ${userMessage}`;
+
   await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
     method: "POST",
     headers: {
@@ -190,7 +201,7 @@ async function runAssistantWithGoogle(userMessage: string, googleResults: string
     },
     body: JSON.stringify({
       role: "user",
-      content: `Bitte beantworte folgende Frage auf Basis dieser Google-Ergebnisse:\n\n${googleResults}\n\nFrage: ${userMessage}`,
+      content: prompt,
     }),
   });
 
@@ -218,7 +229,8 @@ async function runAssistantWithGoogle(userMessage: string, googleResults: string
       },
     });
 
-    if ((await res.json()).status === "completed") completed = true;
+    const runStatus = await res.json();
+    if (runStatus.status === "completed") completed = true;
     attempts++;
   }
 
@@ -279,7 +291,8 @@ async function runVectorSearch(message: string): Promise<string> {
       },
     });
 
-    if ((await res.json()).status === "completed") completed = true;
+    const runStatus = await res.json();
+    if (runStatus.status === "completed") completed = true;
     attempts++;
   }
 

@@ -1,7 +1,9 @@
 const express = require("express");
 const { chromium } = require("playwright");
 const app = express();
+const cors = require("cors");
 
+app.use(cors()); // ← Wichtig für CORS!
 app.use(express.json());
 
 app.post("/scrape", async (req, res) => {
@@ -33,7 +35,8 @@ app.post("/scrape", async (req, res) => {
   res.json({ results });
 });
 
-const PORT = process.env.PORT || 3000;
+// Cloud Run verlangt Port 8080 – ohne Fallback!
+const PORT = process.env.PORT;
 app.listen(PORT, () => {
   console.log(`✅ Playwright Scraper läuft auf Port ${PORT}`);
 });
