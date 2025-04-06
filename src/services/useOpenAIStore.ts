@@ -309,8 +309,8 @@ async function runGoogleSearch(message: string): Promise<string> {
     const { results: fullTexts } = await res.json();
 
     return fullTexts
-      .map((text, i) => `📄 Seite ${i + 1}:\n🔗 ${urls[i]}\n${text.slice(0, 2000)}...`)
-      .join("\n\n");
+  .map((text: string, i: number) => `📄 Seite ${i + 1}:\n🔗 ${urls[i]}\n${text.slice(0, 2000)}...`)
+  .join("\n\n");
   } catch (err) {
     console.error("❗ Fehler bei externem Scraping:", err);
     return "❌ Scraping fehlgeschlagen.";
