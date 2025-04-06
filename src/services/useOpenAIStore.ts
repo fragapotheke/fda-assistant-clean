@@ -306,11 +306,11 @@ async function runGoogleSearch(message: string): Promise<string> {
       body: JSON.stringify({ urls }),
     });
 
-    const { results: fullTexts } = await res.json();
+    const { results: fullTexts }: { results: string[] } = await res.json();
 
     return fullTexts
-  .map((text: string, i: number) => `📄 Seite ${i + 1}:\n🔗 ${urls[i]}\n${text.slice(0, 2000)}...`)
-  .join("\n\n");
+      .map((text, i) => `📄 Seite ${i + 1}:\n🔗 ${urls[i]}\n${text.slice(0, 2000)}...`)
+      .join("\n\n");
   } catch (err) {
     console.error("❗ Fehler bei externem Scraping:", err);
     return "❌ Scraping fehlgeschlagen.";
