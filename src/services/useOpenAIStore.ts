@@ -70,8 +70,6 @@ const useOpenAIStore = create(
       const message = get().message;
       if (!message || !assistantId) return;
 
-      console.log("🚀 getSmartAnswer gestartet mit:", message);
-
       set((prev) => ({
         typing: true,
         chats: [
@@ -89,58 +87,33 @@ const useOpenAIStore = create(
 
       try {
         const [vectorAnswer, googleAnswer] = await Promise.all([
-          runVectorSearch(message).catch((err) => {
-            console.error("❗ Fehler bei Vector:", err);
-            return null;
-          }),
-          runGoogleSearch(message).catch((err) => {
-            console.error("❗ Fehler bei Google:", err);
-            return null;
-          }),
+          runVectorSearch(message).catch(() => null),
+          runGoogleSearch(message).catch(() => null),
         ]);
 
         const isStrong = vectorAnswer && isAnswerStrong(vectorAnswer);
 
-        if (isStrong) {
-          set((prev) => ({
-            chats: [
-              ...prev.chats,
-              {
-                message: {
-                  data: {
-                    content: removeMarkdown(vectorAnswer + "\n\nQuelle: Datenbank"),
-                    is_chunk: false,
-                    type: "ai",
-                  },
-                  content: removeMarkdown(vectorAnswer + "\n\nQuelle: Datenbank"),
-                  type: "ai",
-                },
+        const answer = isStrong
+          ? removeMarkdown(vectorAnswer + "\n\nQuelle: Datenbank")
+          : removeMarkdown(
+              (await runAssistantWithGoogle(message, googleAnswer || "")) +
+                "\n\nQuelle: Google"
+            );
+
+        set((prev) => ({
+          chats: [
+            ...prev.chats,
+            {
+              message: {
+                data: { content: answer, is_chunk: false, type: "ai" },
+                content: answer,
+                type: "ai",
               },
-            ],
-            typing: false,
-          }));
-        } else {
-          const gptAnswer = await runAssistantWithGoogle(message, googleAnswer || "");
-          set((prev) => ({
-            chats: [
-              ...prev.chats,
-              {
-                message: {
-                  data: {
-                    content: removeMarkdown(gptAnswer + "\n\nQuelle: Google"),
-                    is_chunk: false,
-                    type: "ai",
-                  },
-                  content: removeMarkdown(gptAnswer + "\n\nQuelle: Google"),
-                  type: "ai",
-                },
-              },
-            ],
-            typing: false,
-          }));
-        }
-      } catch (error) {
-        console.error("❗ Fehler bei getSmartAnswer:", error);
+            },
+          ],
+          typing: false,
+        }));
+      } catch {
         set({ typing: false });
       }
     },
@@ -150,7 +123,6 @@ const useOpenAIStore = create(
       if (!rawQuery || !assistantId) return;
 
       const message = `Welche Inhaltsstoffe enthält ${rawQuery}?`;
-      console.log("🍃 Inhaltsstoff-Suche gestartet mit:", message);
 
       set((prev) => ({
         typing: true,
@@ -169,25 +141,11 @@ const useOpenAIStore = create(
 
       try {
         const spezialResults = await searchIngredientsOnly(message);
-        const urls = spezialResults.map((r) => r.url);
-        console.log("🔗 URLs für Inhaltsstoffe:", urls);
+        const googleFormatted = spezialResults
+          .map((r, i) => `🔎 Ergebnis ${i + 1}:\n${r.title}\n${r.snippet}\n${r.url}`)
+          .join("\n\n");
 
-        const baseUrl =
-          typeof window === "undefined"
-            ? process.env.NEXT_PUBLIC_SITE_URL || "https://fda-assistant-clean.vercel.app"
-            : "";
-
-        const res = await fetch(`${baseUrl}/api/scrape-ingredients`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ urls }),
-        });
-
-        const data = await res.json();
-        console.log("📥 Gescrapte Inhaltsstoffdaten:", data);
-
-        const extracted = data.results?.join("\n\n") || "❌ Keine spezifischen Stoffe gefunden.";
-        const gptAnswer = await runAssistantWithGoogle(message, extracted);
+        const gptAnswer = await runAssistantWithGoogle(message, googleFormatted);
 
         set((prev) => ({
           chats: [
@@ -206,8 +164,7 @@ const useOpenAIStore = create(
           ],
           typing: false,
         }));
-      } catch (error) {
-        console.error("❗ Fehler bei getIngredientsAnswer:", error);
+      } catch {
         set({ typing: false });
       }
     },
@@ -216,10 +173,7 @@ const useOpenAIStore = create(
 
 export default useOpenAIStore;
 
-// GPT mit Google-Ergebnissen
 async function runAssistantWithGoogle(userMessage: string, googleResults: string): Promise<string> {
-  console.log("📤 runAssistantWithGoogle:", { userMessage, googleResults });
-
   const threadRes = await fetch("https://api.openai.com/v1/threads", {
     method: "POST",
     headers: {
@@ -229,8 +183,7 @@ async function runAssistantWithGoogle(userMessage: string, googleResults: string
     },
   });
 
-  const threadData = await threadRes.json();
-  const threadId = threadData?.id;
+  const threadId = (await threadRes.json()).id;
 
   await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
     method: "POST",
@@ -255,60 +208,49 @@ async function runAssistantWithGoogle(userMessage: string, googleResults: string
     body: JSON.stringify({ assistant_id: assistantId }),
   });
 
-  const runData = await runRes.json();
-  const runId = runData?.id;
+  const runId = (await runRes.json()).id;
 
   let completed = false;
   let attempts = 0;
 
   while (!completed && attempts < 15) {
     await new Promise((r) => setTimeout(r, 1000));
-    const checkRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs/${runId}`, {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "OpenAI-Beta": "assistants=v2",
-      },
-    });
-
-    const checkData = await checkRes.json();
-    if (checkData.status === "completed") {
-      completed = true;
-    }
+    const statusCheck = await fetch(
+      `https://api.openai.com/v1/threads/${threadId}/runs/${runId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "OpenAI-Beta": "assistants=v2",
+        },
+      }
+    );
+    if ((await statusCheck.json()).status === "completed") completed = true;
     attempts++;
   }
 
-  const messagesRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
+  const messages = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "OpenAI-Beta": "assistants=v2",
     },
   });
 
-  const messagesData = await messagesRes.json();
-  const lastMessage = messagesData.data?.find((msg: any) => msg.role === "assistant");
-  const rawAnswer = lastMessage?.content?.[0]?.text?.value;
-
-  if (!rawAnswer) {
-    console.warn("⚠️ Keine GPT-Antwort erhalten!");
-    return "❌ Keine GPT-Antwort.";
-  }
-
-  return cleanGptArtifacts(rawAnswer);
+  const msgData = await messages.json();
+  const lastMsg = msgData.data?.find((msg: any) => msg.role === "assistant");
+  return lastMsg?.content?.[0]?.text?.value || "❌ Keine GPT-Antwort.";
 }
 
-// Vector Search
 async function runVectorSearch(message: string): Promise<string> {
-  const threadRes = await fetch("https://api.openai.com/v1/threads", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-      "OpenAI-Beta": "assistants=v2",
-    },
-  });
-
-  const threadData = await threadRes.json();
-  const threadId = threadData?.id;
+  const threadId = (await (
+    await fetch("https://api.openai.com/v1/threads", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+        "OpenAI-Beta": "assistants=v2",
+      },
+    })
+  ).json()).id;
 
   await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
     method: "POST",
@@ -320,78 +262,50 @@ async function runVectorSearch(message: string): Promise<string> {
     body: JSON.stringify({ role: "user", content: message }),
   });
 
-  const runRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-      "OpenAI-Beta": "assistants=v2",
-    },
-    body: JSON.stringify({ assistant_id: assistantId }),
-  });
-
-  const runData = await runRes.json();
-  const runId = runData?.id;
-
-  let completed = false;
-  let attempts = 0;
-
-  while (!completed && attempts < 15) {
-    await new Promise((r) => setTimeout(r, 1000));
-    const checkRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs/${runId}`, {
+  const runId = (await (
+    await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
+      method: "POST",
       headers: {
+        "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
         "OpenAI-Beta": "assistants=v2",
       },
-    });
+      body: JSON.stringify({ assistant_id: assistantId }),
+    })
+  ).json()).id;
 
-    const checkData = await checkRes.json();
-    if (checkData.status === "completed") {
-      completed = true;
-    }
+  let completed = false;
+  let attempts = 0;
+  while (!completed && attempts < 15) {
+    await new Promise((r) => setTimeout(r, 1000));
+    const res = await fetch(
+      `https://api.openai.com/v1/threads/${threadId}/runs/${runId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "OpenAI-Beta": "assistants=v2",
+        },
+      }
+    );
+    if ((await res.json()).status === "completed") completed = true;
     attempts++;
   }
 
-  const messagesRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
+  const messages = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "OpenAI-Beta": "assistants=v2",
     },
   });
 
-  const messagesData = await messagesRes.json();
-  const lastMessage = messagesData.data?.find((msg: any) => msg.role === "assistant");
-  return lastMessage?.content?.[0]?.text?.value || "❌ Keine Antwort von Assistant erhalten.";
+  const msgData = await messages.json();
+  const lastMsg = msgData.data?.find((msg: any) => msg.role === "assistant");
+  return lastMsg?.content?.[0]?.text?.value || "❌ Keine Antwort von Assistant erhalten.";
 }
 
-// Klassische Volltextsuche
 async function runGoogleSearch(message: string): Promise<string> {
   const results = await searchGoogle(message);
-  const urls = results.map((r) => r.url);
-  const fullTexts = await fetchScrapedPagesFromAPI(urls);
-
-  return fullTexts
-    .map((text, i) => `📄 Seite ${i + 1}:\n🔗 ${urls[i]}\n${text.slice(0, 2000)}...`)
+  return results
+    .map((r, i) => `📄 Seite ${i + 1}:\n${r.title}\n${r.snippet}\n🔗 ${r.url}`)
     .join("\n\n");
-}
-
-async function fetchScrapedPagesFromAPI(urls: string[]): Promise<string[]> {
-  try {
-    const baseUrl =
-      typeof window === "undefined"
-        ? process.env.NEXT_PUBLIC_SITE_URL || "https://fda-assistant-clean.vercel.app"
-        : "";
-
-    const res = await fetch(`${baseUrl}/api/scrape`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ urls }),
-    });
-
-    const data = await res.json();
-    return data.results || [];
-  } catch (error) {
-    console.error("❗ Fehler beim Abrufen gescrapter Inhalte:", error);
-    return urls.map(() => "❌ Scraping fehlgeschlagen");
-  }
 }
