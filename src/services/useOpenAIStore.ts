@@ -112,9 +112,9 @@ const useOpenAIStore = create(
     getIngredientsAnswer: async (widget: IDetailsWidget) => {
       const rawQuery = get().message;
       if (!rawQuery || !assistantId) return;
-
+    
       const message = `Welche Inhaltsstoffe enthält ${rawQuery}?`;
-
+    
       set((prev) => ({
         typing: true,
         chats: [
@@ -129,22 +129,31 @@ const useOpenAIStore = create(
         ],
         message: "",
       }));
-
+    
       try {
+        // 🔍 Schritt 1: Nur auf Inhaltsstoff-Webseiten suchen
         const spezialResults = await searchIngredientsOnly(message);
         const urls = spezialResults.map((r) => r.url);
-
+    
+        // 🔍 Schritt 2: Inhalte scrapen
         const response = await fetch(scraperUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ urls }),
         });
-
+    
         const { results } = await response.json();
         const scrapedText = results?.join("\n\n") || "❌ Keine Inhalte gefunden.";
-
-        const gptAnswer = await runAssistantWithGoogle(message, scrapedText);
-
+    
+        // ✅ Test-Log: Was wurde tatsächlich gefunden?
+        console.log("🔍 scrapedText:", scrapedText);
+    
+        // 🧠 Schritt 3: GPT-Antwort mit Fokus auf strukturierte Inhaltsstoffe
+        const gptAnswer = await runAssistantWithGoogle(
+          `Extrahiere ausschließlich die Wirkstoffe und Hilfsstoffe aus folgendem Text. Gib eine klare, stichpunktartige Liste zurück.`, 
+          scrapedText
+        );
+    
         set((prev) => ({
           chats: [
             ...prev.chats,
