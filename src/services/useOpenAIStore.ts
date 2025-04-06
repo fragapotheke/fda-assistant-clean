@@ -344,7 +344,7 @@ async function runVectorSearch(message: string): Promise<string> {
   return lastMessage?.content?.[0]?.text?.value || "❌ Keine Antwort von Assistant erhalten.";
 }
 
-// Google-Suche mit Scraping über API-Route
+// Scraping via API (funktioniert im App-Router)
 async function runGoogleSearch(message: string): Promise<string> {
   const results = await searchGoogle(message);
   const urls = results.map((r) => r.url);
@@ -355,10 +355,15 @@ async function runGoogleSearch(message: string): Promise<string> {
     .join("\n\n");
 }
 
-// Aufruf der Scrape-API mit URLs
+// Aufruf der Scrape-API mit korrekter URL (App Router kompatibel)
 async function fetchScrapedPagesFromAPI(urls: string[]): Promise<string[]> {
   try {
-    const res = await fetch("/api/scrape", {
+    const baseUrl =
+      typeof window === "undefined"
+        ? process.env.NEXT_PUBLIC_SITE_URL || "https://fda-assistant-clean.vercel.app"
+        : "";
+
+    const res = await fetch(`${baseUrl}/api/scrape`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ urls }),
