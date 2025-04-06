@@ -52,6 +52,7 @@ function isAnswerStrong(text: string): boolean {
   return !schwachePhrasen.some((phrase) => textLower.includes(phrase));
 }
 
+// Entfernt OpenAI-Marker wie   ohne andere Inhalte zu beeinträchtigen
 function cleanGptArtifacts(text: string): string {
   return text.replace(/【\d+:\d+†source】/g, "").trim();
 }
@@ -94,11 +95,10 @@ const useOpenAIStore = create(
         const isStrong = vectorAnswer && isAnswerStrong(vectorAnswer);
 
         const answer = isStrong
-          ? removeMarkdown(vectorAnswer + "\n\nQuelle: Datenbank")
-          : removeMarkdown(
-              (await runAssistantWithGoogle(message, googleAnswer || "")) +
-                "\n\nQuelle: Google"
-            );
+          ? cleanGptArtifacts(removeMarkdown(vectorAnswer)) + "\n\nQuelle: Datenbank"
+          : cleanGptArtifacts(
+              removeMarkdown(await runAssistantWithGoogle(message, googleAnswer || ""))
+            ) + "\n\nQuelle: Google";
 
         set((prev) => ({
           chats: [
@@ -153,11 +153,13 @@ const useOpenAIStore = create(
             {
               message: {
                 data: {
-                  content: removeMarkdown(gptAnswer + "\n\nQuelle: Google"),
+                  content:
+                    cleanGptArtifacts(removeMarkdown(gptAnswer)) + "\n\nQuelle: Google",
                   is_chunk: false,
                   type: "ai",
                 },
-                content: removeMarkdown(gptAnswer + "\n\nQuelle: Google"),
+                content:
+                  cleanGptArtifacts(removeMarkdown(gptAnswer)) + "\n\nQuelle: Google",
                 type: "ai",
               },
             },
@@ -215,7 +217,7 @@ async function runAssistantWithGoogle(userMessage: string, googleResults: string
 
   while (!completed && attempts < 15) {
     await new Promise((r) => setTimeout(r, 1000));
-    const statusCheck = await fetch(
+    const res = await fetch(
       `https://api.openai.com/v1/threads/${threadId}/runs/${runId}`,
       {
         headers: {
@@ -224,7 +226,7 @@ async function runAssistantWithGoogle(userMessage: string, googleResults: string
         },
       }
     );
-    if ((await statusCheck.json()).status === "completed") completed = true;
+    if ((await res.json()).status === "completed") completed = true;
     attempts++;
   }
 
