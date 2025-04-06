@@ -143,10 +143,7 @@ const useOpenAIStore = create(
         const { results } = await response.json();
         const scrapedText = results?.join("\n\n") || "❌ Keine Inhalte gefunden.";
 
-        const gptAnswer = await runAssistantWithGoogle(
-          `Extrahiere ausschließlich die Wirkstoffe und Hilfsstoffe aus folgendem Text. Gib eine klare, stichpunktartige Liste zurück.`,
-          scrapedText
-        );
+        const gptAnswer = await runAssistantWithGoogle(message, scrapedText);
 
         set((prev) => ({
           chats: [
@@ -175,14 +172,6 @@ const useOpenAIStore = create(
 export default useOpenAIStore;
 
 async function runAssistantWithGoogle(userMessage: string, googleResults: string): Promise<string> {
-  const relevantPart = googleResults
-    .split("\n")
-    .filter((line) => /inhaltsstoff|hilfsstoff|wirkstoff/i.test(line))
-    .join("\n")
-    .slice(0, 4000);
-
-  const prompt = `Extrahiere ausschließlich die Inhaltsstoffe aus dem folgenden Text. Gib eine strukturierte Liste mit den Wirkstoffen und Hilfsstoffen aus. Keine weiteren Erklärungen oder Hinweise.\n\n${relevantPart}`;
-
   const threadRes = await fetch("https://api.openai.com/v1/threads", {
     method: "POST",
     headers: {
@@ -203,7 +192,7 @@ async function runAssistantWithGoogle(userMessage: string, googleResults: string
     },
     body: JSON.stringify({
       role: "user",
-      content: prompt,
+      content: `Bitte beantworte folgende Frage auf Basis dieser Google-Ergebnisse:\n\n${googleResults}\n\nFrage: ${userMessage}`,
     }),
   });
 
