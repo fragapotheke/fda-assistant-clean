@@ -136,27 +136,27 @@ const useOpenAIStore = create(
 
       try {
         const spezialResults = await searchIngredientsOnly(rawQuery);
-        const validUrl = spezialResults.find((r) => r.url.startsWith("https://www.docmorris.de/"))?.url;
+        const urls = [spezialResults[0].url].filter((url) =>
+          url.startsWith("https://www.docmorris.de/")
+        );
 
-        if (!validUrl) {
+        if (urls.length === 0) {
           throw new Error("❌ Keine gültige DocMorris-URL gefunden");
         }
 
         const response = await fetch(scraperUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ urls: [validUrl] }),
+          body: JSON.stringify({ urls }),
         });
 
         const { results } = await response.json();
-        const scrapedText = results?.[0]?.trim();
+        const scrapedText = results?.join("\n\n") || "❌ Keine Inhalte gefunden.";
 
-        const gptAnswer = scrapedText
-          ? await runAssistantWithGoogle(
-              "Formatiere folgenden Text optisch ansprechend – mit Fettschrift für Wirkstoffe und Hilfsstoffe. Gib keine zusätzliche Erklärung.",
-              scrapedText
-            )
-          : await runAssistantWithGoogle(userMessage, "");
+        const gptAnswer = await runAssistantWithGoogle(
+          "Formatiere folgenden Text optisch ansprechend – mit Fettschrift für Wirkstoffe und Hilfsstoffe. Gib keine zusätzliche Erklärung.",
+          scrapedText
+        );
 
         const cleaned = cleanGptArtifacts(removeMarkdown(gptAnswer)) + "\n\nQuelle: Google";
 
@@ -217,7 +217,10 @@ async function runAssistantWithGoogle(userMessage: string, context: string): Pro
       Authorization: `Bearer ${apiKey}`,
       "OpenAI-Beta": "assistants=v2",
     },
-    body: JSON.stringify({ role: "user", content: `${userMessage}\n\n${context}` }),
+    body: JSON.stringify({
+      role: "user",
+      content: `${userMessage}\n\n${context}`,
+    }),
   });
 
   const runRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
@@ -323,9 +326,42 @@ async function runVectorSearch(message: string): Promise<string> {
 
 async function runGoogleSearch(message: string): Promise<string> {
   const results = await searchGoogle(message);
-  const urls = results.map((r) => r.url).filter((url) => url.startsWith("https://www.docmorris.de/"));
+  const urls = results
+    .map((r) => r.url)
+    .filter((url) => url.startsWith("https://www.docmorris.de/"));
 
-  if (urls.length === 0) return "";
+  if (urls.length === 0) {
+    console.warn("❗ Keine passende www.docmorris.de URL gefunden");
+    return "";
+  }
+
+  const url = urls[0];
+  try {
+    const res = await fetch(scraperUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ urls: [url] }),
+    });
+
+    const { results: fullTexts }: { results: string[] } = await res.json();
+    const content = fullTexts?.[0]?.trim();
+
+    if (!content) {
+      console.warn("❗ Gültige URL, aber leerer Scraping-Inhalt");
+      return "";
+    }
+
+    return `🔗 ${url}
+${content}`;
+  } catch (err) {
+    console.error("❗ Fehler bei externem Scraping:", err);
+    return "";
+  }
+}
+  const results = await searchGoogle(message);
+  const urls = results
+    .map((r) => r.url)
+    .filter((url) => url.startsWith("https://www.docmorris.de/"));
 
   try {
     const res = await fetch(scraperUrl, {
@@ -337,7 +373,9 @@ async function runGoogleSearch(message: string): Promise<string> {
     const { results: fullTexts }: { results: string[] } = await res.json();
 
     return fullTexts
-      .map((text, i) => `📄 Seite ${i + 1}:\n🔗 ${urls[i]}\n${text.slice(0, 2000)}...`)
+      .map(
+        (text, i) => `📄 Seite ${i + 1}:\n🔗 ${urls[i]}\n${text.slice(0, 2000)}...`
+      )
       .join("\n\n");
   } catch (err) {
     console.error("❗ Fehler bei externem Scraping:", err);
