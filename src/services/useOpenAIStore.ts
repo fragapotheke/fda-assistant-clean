@@ -49,9 +49,29 @@ function isAnswerStrong(text: string): boolean {
 function cleanGptArtifacts(text: string): string {
   return text
     .replace(/【\d+:\d+†source】/g, "")
-    .replace(/^🔗.*$/gm, "") // entfernt ganze Zeilen mit "🔗"
-    .replace(/[💊🧪📄🔗•]/g, "") // entfernt Emojis & Aufzählungszeichen
+    .replace(/^🔗.*$/gm, "")
+    .replace(/[💊🧪📄🔗•]/g, "")
     .trim();
+}
+
+function normalizeAndCorrectProductName(input: string): string {
+  let name = input.toLowerCase();
+
+  name = name.replace(/(\d+mg|\d+\s*mg)\s*(.*)/i, (_m, mg, rest) => `${rest.trim()} ${mg.replace(/\s+/g, "")}`);
+
+  name = name
+    .replace(/\b1a\b/i, "1A")
+    .replace(/\bratiopharm\b/i, "Ratiopharm")
+    .replace(/\bhexal\b/i, "Hexal")
+    .replace(/\bstada\b/i, "Stada")
+    .replace(/\baliud\b/i, "Aliud")
+    .replace(/\bsandoz\b/i, "Sandoz")
+    .replace(/\bteva\b/i, "Teva")
+    .replace(/\bbasics\b/i, "Basics");
+
+  name = name.replace(/\s+/g, " ").trim();
+
+  return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
 const initialState = {
@@ -117,7 +137,8 @@ const useOpenAIStore = create(
       const rawQuery = get().message;
       if (!rawQuery || !assistantId) return;
 
-      const userMessage = `Welche Inhaltsstoffe enthält ${rawQuery}?`;
+      const normalizedQuery = normalizeAndCorrectProductName(rawQuery);
+      const userMessage = `Welche Inhaltsstoffe enthält ${normalizedQuery}?`;
 
       set((prev) => ({
         typing: true,
@@ -135,7 +156,7 @@ const useOpenAIStore = create(
       }));
 
       try {
-        const spezialResults = await searchIngredientsOnly(rawQuery);
+        const spezialResults = await searchIngredientsOnly(normalizedQuery);
         const urls = spezialResults
           .map((r) => r.url)
           .filter((url) => url.startsWith("https://www.docmorris.de/"));
