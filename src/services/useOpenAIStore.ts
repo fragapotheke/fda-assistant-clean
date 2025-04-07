@@ -50,6 +50,14 @@ function cleanGptArtifacts(text: string): string {
   return text.replace(/【\d+:\d+†source】/g, "").trim();
 }
 
+function extractProduktname(raw: string): string {
+  return raw
+    .replace(/(welche|was sind|enthaltene)?\s*inhaltsstoffe/i, "")
+    .replace(/(bitte)?\s*gib\s+mir\s+/i, "")
+    .replace(/[\?\!]/g, "")
+    .trim();
+}
+
 const initialState = {
   chats: [] as Chats,
   typing: false,
@@ -113,7 +121,8 @@ const useOpenAIStore = create(
       const rawQuery = get().message;
       if (!rawQuery || !assistantId) return;
 
-      const message = `Welche Inhaltsstoffe enthält ${rawQuery}?`;
+      const produktname = extractProduktname(rawQuery);
+      const message = `Welche Inhaltsstoffe enthält ${produktname}?`;
 
       set((prev) => ({
         typing: true,
@@ -131,7 +140,7 @@ const useOpenAIStore = create(
       }));
 
       try {
-        const spezialResults = await searchIngredientsOnly(message);
+        const spezialResults = await searchIngredientsOnly(produktname);
         const urls = spezialResults.map((r) => r.url);
 
         const response = await fetch(scraperUrl, {

@@ -28,7 +28,7 @@ export async function searchGoogle(query: string): Promise<GoogleResult[]> {
   }));
 }
 
-// 🌿 Spezialsuche NUR auf ihreapotheken.de mit inurl:/produkt/
+// 🌿 Spezialsuche NUR auf ihreapotheken.de mit inurl:/produkt/ und toleranter Produkterkennung
 export async function searchIngredientsOnly(produktname: string): Promise<GoogleResult[]> {
   const spezialQuery = `site:ihreapotheken.de inurl:/produkt/ "${produktname}" Inhaltsstoffe`;
 
@@ -42,7 +42,7 @@ export async function searchIngredientsOnly(produktname: string): Promise<Google
     return [];
   }
 
-  const results: GoogleResult[] = data.items.slice(0, 3).map((item: any) => ({
+  const results: GoogleResult[] = data.items.slice(0, 1).map((item: any) => ({
     title: item.title,
     snippet: item.snippet,
     url: item.link,

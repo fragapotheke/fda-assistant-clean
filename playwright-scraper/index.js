@@ -3,7 +3,7 @@ const { chromium } = require("playwright");
 const app = express();
 const cors = require("cors");
 
-app.use(cors()); // ← Wichtig für CORS!
+app.use(cors());
 app.use(express.json());
 
 app.post("/scrape", async (req, res) => {
@@ -21,8 +21,38 @@ app.post("/scrape", async (req, res) => {
     const page = await context.newPage();
     try {
       await page.goto(url, { timeout: 15000 });
-      const content = await page.evaluate(() => document.body.innerText);
-      results.push(`🔗 ${url}\n${content.slice(0, 2000)}...`);
+
+      const content = await page.evaluate(() => {
+        const root = document.querySelector("#pflichtangaben");
+        if (!root) return "❌ Bereich '#pflichtangaben' nicht gefunden.";
+
+        function getListAfterTitle(title) {
+          const paragraphs = Array.from(root.querySelectorAll("p"));
+          const heading = paragraphs.find(p =>
+            p.textContent.trim().toLowerCase().includes(title.toLowerCase())
+          );
+          if (!heading) return "Nicht gefunden.";
+
+          // Nächstes Element suchen (UL-Liste)
+          let next = heading.nextElementSibling;
+          while (next && next.tagName.toLowerCase() !== "ul") {
+            next = next.nextElementSibling;
+          }
+
+          if (!next) return "Nicht gefunden.";
+
+          return Array.from(next.querySelectorAll("li"))
+            .map(li => "• " + li.textContent.trim())
+            .join("\n");
+        }
+
+        const wirkstoffe = getListAfterTitle("wirkstoff");
+        const hilfsstoffe = getListAfterTitle("hilfsstoff");
+
+        return `💊 Wirkstoffe:\n${wirkstoffe}\n\n🧪 Hilfsstoffe:\n${hilfsstoffe}`;
+      });
+
+      results.push(`🔗 ${url}\n${content}`);
     } catch (error) {
       console.error("❗ Fehler bei", url, error);
       results.push(`🔗 ${url}\n❌ Scraping fehlgeschlagen`);
