@@ -1,28 +1,12 @@
 {
-    "id": "3Znq3d0NR",
+    "id": "WHc1zKANg",
     "name": "FDA KI 4.0",
     "product": "livechat",
     "blocks": {
-        "authorization": {
-            "clientId": "2428a5f3798e2a2e289949553d0f7134",
-            "type": "javascript_app",
-            "redirectUri": "https://fda-ki-40-steffens-projects-931a2b78.vercel.app"
-        },
         "repository": {
             "provider": "github",
             "name": "fragapotheke/fda-assistant-clean",
             "branch": "main"
-        },
-        "deployment": {
-            "provider": "vercel",
-            "url": "https://fda-ki-40-steffens-projects-931a2b78.vercel.app"
-        },
-        "widgets": {
-            "iM2Qi2lAGz": {
-                "url": "https://fda-ki-40.vercel.app/",
-                "placement": "plugin",
-                "initialState": ""
-            }
         }
     }
 }
