@@ -358,25 +358,3 @@ ${content}`;
     return "";
   }
 }
-  const results = await searchGoogle(message);
-  const urls = results
-    .map((r) => r.url)
-    .filter((url) => url.startsWith("https://www.docmorris.de/"));
-
-  try {
-    const res = await fetch(scraperUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ urls }),
-    });
-
-    const { results: fullTexts }: { results: string[] } = await res.json();
-
-    return fullTexts
-  .map((text, i) => `📄 Seite ${i + 1}:\n🔗 ${urls[i]}\n${text.slice(0, 2000)}...`)
-  .join("\n\n");
-  } catch (err) {
-    console.error("❗ Fehler bei externem Scraping:", err);
-    return "❌ Scraping fehlgeschlagen.";
-  }
-}
