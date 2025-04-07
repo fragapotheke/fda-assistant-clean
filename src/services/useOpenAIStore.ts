@@ -47,7 +47,12 @@ function isAnswerStrong(text: string): boolean {
 }
 
 function cleanGptArtifacts(text: string): string {
-  return text.replace(/【\d+:\d+†source】/g, "").trim();
+  return text
+    .replace(/【\d+:\d+†source】/g, "")
+    .replace(/🔗.*?
+/g, "")  // Zeilen mit "🔗 ..." entfernen
+    .replace(/[💊🧪📄🔗•]/g, "")  // Emojis entfernen
+    .trim();
 }
 
 const initialState = {
@@ -132,7 +137,7 @@ const useOpenAIStore = create(
 
       try {
         const spezialResults = await searchIngredientsOnly(rawQuery);
-        const urls = spezialResults.map((r) => r.url);
+        const urls = [spezialResults[0].url];
 
         if (urls.length === 0) {
           throw new Error("❌ Keine URLs gefunden");
