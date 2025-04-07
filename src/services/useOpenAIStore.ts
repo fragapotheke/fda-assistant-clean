@@ -4,7 +4,7 @@ import { IDetailsWidget } from "@livechat/agent-app-sdk";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
 import removeMarkdown from "remove-markdown";
-import { searchGoogle, searchIngredientsOnly } from "./googleSearch";
+import { searchGoogle } from "./googleSearch";
 
 const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY!;
 const assistantId = process.env.NEXT_PUBLIC_ASSISTANT_ID!;
@@ -135,26 +135,26 @@ const useOpenAIStore = create(
       }));
 
       try {
-        const spezialResults = await searchIngredientsOnly(rawQuery);
-        const urls = [spezialResults[0].url].filter((url) =>
-          url.startsWith("https://www.docmorris.de/")
-        );
+        const searchResults = await searchGoogle(`${rawQuery} site:www.docmorris.de`);
+        const validUrl = searchResults
+          .map((r) => r.url)
+          .find((url) => url.startsWith("https://www.docmorris.de/"));
 
-        if (urls.length === 0) {
-          throw new Error("❌ Keine gültige DocMorris-URL gefunden");
-        }
+        if (!validUrl) throw new Error("❌ Keine gültige DocMorris-URL gefunden");
 
-        const response = await fetch(scraperUrl, {
+        const scrapeRes = await fetch(scraperUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ urls }),
+          body: JSON.stringify({ urls: [validUrl] }),
         });
 
-        const { results } = await response.json();
-        const scrapedText = results?.join("\n\n") || "❌ Keine Inhalte gefunden.";
+        const { results }: { results: string[] } = await scrapeRes.json();
+        const scrapedText = results?.[0]?.trim();
+
+        if (!scrapedText) throw new Error("❌ Scraping war leer");
 
         const gptAnswer = await runAssistantWithGoogle(
-          "Formatiere folgenden Text optisch ansprechend – mit Fettschrift für Wirkstoffe und Hilfsstoffe. Gib keine zusätzliche Erklärung.",
+          "Extrahiere ausschließlich die Wirkstoffe und Hilfsstoffe aus folgendem Text. Gib sie klar und strukturiert aus. Keine zusätzliche Erklärung.",
           scrapedText
         );
 
@@ -326,35 +326,6 @@ async function runVectorSearch(message: string): Promise<string> {
 
 async function runGoogleSearch(message: string): Promise<string> {
   const results = await searchGoogle(message);
-  const urls = results
-    .map((r) => r.url)
-    .filter((url) => url.startsWith("https://www.docmorris.de/"));
-
-  if (urls.length === 0) {
-    console.warn("❗ Keine passende www.docmorris.de URL gefunden");
-    return "";
-  }
-
-  const url = urls[0];
-  try {
-    const res = await fetch(scraperUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ urls: [url] }),
-    });
-
-    const { results: fullTexts }: { results: string[] } = await res.json();
-    const content = fullTexts?.[0]?.trim();
-
-    if (!content) {
-      console.warn("❗ Gültige URL, aber leerer Scraping-Inhalt");
-      return "";
-    }
-
-    return `🔗 ${url}
-${content}`;
-  } catch (err) {
-    console.error("❗ Fehler bei externem Scraping:", err);
-    return "";
-  }
+  const urls = results.map((r) => r.url);
+  return urls.join("\n");
 }
