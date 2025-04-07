@@ -4,7 +4,7 @@ import { IDetailsWidget } from "@livechat/agent-app-sdk";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
 import removeMarkdown from "remove-markdown";
-import { searchGoogle } from "./googleSearch";
+import { searchGoogle, searchIngredientsOnly } from "./googleSearch";
 
 const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY!;
 const assistantId = process.env.NEXT_PUBLIC_ASSISTANT_ID!;
@@ -135,26 +135,30 @@ const useOpenAIStore = create(
       }));
 
       try {
-        const searchResults = await searchGoogle(`${rawQuery} site:www.docmorris.de`);
-        const validUrl = searchResults
+        const spezialResults = await searchIngredientsOnly(rawQuery);
+        const urls = spezialResults
           .map((r) => r.url)
-          .find((url) => url.startsWith("https://www.docmorris.de/"));
+          .filter((url) => url.startsWith("https://www.docmorris.de/"));
 
-        if (!validUrl) throw new Error("❌ Keine gültige DocMorris-URL gefunden");
+        if (urls.length === 0) {
+          throw new Error("❌ Keine gültige www.docmorris.de URL gefunden.");
+        }
 
-        const scrapeRes = await fetch(scraperUrl, {
+        const response = await fetch(scraperUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ urls: [validUrl] }),
+          body: JSON.stringify({ urls: [urls[0]] }),
         });
 
-        const { results }: { results: string[] } = await scrapeRes.json();
+        const { results } = await response.json();
         const scrapedText = results?.[0]?.trim();
 
-        if (!scrapedText) throw new Error("❌ Scraping war leer");
+        if (!scrapedText) {
+          throw new Error("❌ Kein verwertbarer Inhalt von DocMorris gescraped.");
+        }
 
         const gptAnswer = await runAssistantWithGoogle(
-          "Extrahiere ausschließlich die Wirkstoffe und Hilfsstoffe aus folgendem Text. Gib sie klar und strukturiert aus. Keine zusätzliche Erklärung.",
+          "Formatiere folgenden Text optisch ansprechend – mit Fettschrift für Wirkstoffe und Hilfsstoffe. Gib keine zusätzliche Erklärung.",
           scrapedText
         );
 
@@ -326,6 +330,31 @@ async function runVectorSearch(message: string): Promise<string> {
 
 async function runGoogleSearch(message: string): Promise<string> {
   const results = await searchGoogle(message);
-  const urls = results.map((r) => r.url);
-  return urls.join("\n");
+  const urls = results
+    .map((r) => r.url)
+    .filter((url) => url.startsWith("https://www.docmorris.de/"));
+
+  if (urls.length === 0) {
+    return "";
+  }
+
+  try {
+    const res = await fetch(scraperUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ urls: [urls[0]] }),
+    });
+
+    const { results: fullTexts }: { results: string[] } = await res.json();
+    const content = fullTexts?.[0]?.trim();
+
+    if (!content) {
+      return "";
+    }
+
+    return `🔗 ${urls[0]}\n${content}`;
+  } catch (err) {
+    console.error("❗ Fehler bei externem Scraping:", err);
+    return "";
+  }
 }
