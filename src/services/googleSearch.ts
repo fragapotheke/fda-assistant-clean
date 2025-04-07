@@ -1,4 +1,3 @@
-// src/services/googleSearch.ts
 
 const apiKey = process.env.NEXT_PUBLIC_GOOGLE_CSE_API_KEY!;
 const cx = process.env.NEXT_PUBLIC_GOOGLE_CSE_CX!;
@@ -30,8 +29,10 @@ export async function searchGoogle(query: string): Promise<GoogleResult[]> {
 
 // 🌿 Intelligente Inhaltsstoff-Suche – zuerst docmorris.de, dann ihreapotheken.de als Fallback
 export async function searchIngredientsOnly(produktname: string): Promise<GoogleResult[]> {
-  const firstWord = produktname.split(" ")[0].toLowerCase();
-  const isMatch = (text: string) => text.toLowerCase().includes(firstWord);
+  const normalized = produktname.toLowerCase().replace(/-/g, " ");
+  const hauptname = normalized.split(" ")[0];
+
+  const isMatch = (text: string) => text.toLowerCase().includes(hauptname);
 
   // 1. Primäre Suche auf DocMorris
   const docMorrisQuery = `site:docmorris.de ${produktname} Inhaltsstoffe`;
@@ -41,15 +42,18 @@ export async function searchIngredientsOnly(produktname: string): Promise<Google
   let data = await res.json();
 
   if (data.items && data.items.length > 0) {
-    const filtered = data.items.filter((item: any) => isMatch(item.title) || isMatch(item.snippet));
-    if (filtered.length > 0) {
-      const results: GoogleResult[] = filtered.slice(0, 3).map((item: any) => ({
-        title: item.title,
-        snippet: item.snippet,
-        url: item.link,
-      }));
-      console.log("🔍 Inhaltsstoff-Suche – DocMorris:", results.map((r) => r.url));
-      return results;
+    const match = data.items.find((item: any) =>
+      isMatch(item.title) || isMatch(item.snippet)
+    );
+
+    if (match) {
+      const result: GoogleResult = {
+        title: match.title,
+        snippet: match.snippet,
+        url: match.link,
+      };
+      console.log("🔍 Inhaltsstoff-Suche – DocMorris Match:", result.url);
+      return [result];
     }
   }
 
@@ -67,18 +71,21 @@ export async function searchIngredientsOnly(produktname: string): Promise<Google
     return [];
   }
 
-  const filteredFallback = data.items.filter((item: any) => isMatch(item.title) || isMatch(item.snippet));
-  if (filteredFallback.length === 0) {
+  const match = data.items.find((item: any) =>
+    isMatch(item.title) || isMatch(item.snippet)
+  );
+
+  if (!match) {
     console.warn("❌ Kein passender Treffer im Fallback gefunden");
     return [];
   }
 
-  const fallbackResults: GoogleResult[] = filteredFallback.slice(0, 3).map((item: any) => ({
-    title: item.title,
-    snippet: item.snippet,
-    url: item.link,
-  }));
+  const fallbackResult: GoogleResult = {
+    title: match.title,
+    snippet: match.snippet,
+    url: match.link,
+  };
 
-  console.log("🔍 Inhaltsstoff-Suche – Fallback:", fallbackResults.map((r) => r.url));
-  return fallbackResults;
+  console.log("🔍 Inhaltsstoff-Suche – Fallback Match:", fallbackResult.url);
+  return [fallbackResult];
 }
