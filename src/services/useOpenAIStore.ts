@@ -136,10 +136,12 @@ const useOpenAIStore = create(
 
       try {
         const spezialResults = await searchIngredientsOnly(rawQuery);
-        const urls = [spezialResults[0].url];
+        const urls = [spezialResults[0].url].filter((url) =>
+          url.startsWith("https://www.docmorris.de/")
+        );
 
         if (urls.length === 0) {
-          throw new Error("❌ Keine URLs gefunden");
+          throw new Error("❌ Keine gültige DocMorris-URL gefunden");
         }
 
         const response = await fetch(scraperUrl, {
@@ -338,8 +340,9 @@ async function runGoogleSearch(message: string): Promise<string> {
     const { results: fullTexts }: { results: string[] } = await res.json();
 
     return fullTexts
-      .map((text, i) => `📄 Seite ${i + 1}:
-🔗 ${urls[i]}\n${text.slice(0, 2000)}...`)
+      .map(
+        (text, i) => `📄 Seite ${i + 1}:\n🔗 ${urls[i]}\n${text.slice(0, 2000)}...`
+      )
       .join("\n\n");
   } catch (err) {
     console.error("❗ Fehler bei externem Scraping:", err);
