@@ -1,5 +1,3 @@
-// src/services/useOpenAIStore.ts
-
 import { IDetailsWidget } from "@livechat/agent-app-sdk";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";
@@ -48,14 +46,6 @@ function isAnswerStrong(text: string): boolean {
 
 function cleanGptArtifacts(text: string): string {
   return text.replace(/【\d+:\d+†source】/g, "").trim();
-}
-
-function extractProduktname(raw: string): string {
-  return raw
-    .replace(/(welche|was sind|enthaltene)?\s*inhaltsstoffe/i, "")
-    .replace(/(bitte)?\s*gib\s+mir\s+/i, "")
-    .replace(/[\?\!]/g, "")
-    .trim();
 }
 
 const initialState = {
@@ -121,8 +111,7 @@ const useOpenAIStore = create(
       const rawQuery = get().message;
       if (!rawQuery || !assistantId) return;
 
-      const produktname = extractProduktname(rawQuery);
-      const message = `Welche Inhaltsstoffe enthält ${produktname}?`;
+      const userMessage = `Welche Inhaltsstoffe enthält ${rawQuery}?`;
 
       set((prev) => ({
         typing: true,
@@ -130,8 +119,8 @@ const useOpenAIStore = create(
           ...prev.chats,
           {
             message: {
-              data: { content: message, is_chunk: false, type: "human" },
-              content: message,
+              data: { content: userMessage, is_chunk: false, type: "human" },
+              content: userMessage,
               type: "human",
             },
           },
@@ -140,8 +129,12 @@ const useOpenAIStore = create(
       }));
 
       try {
-        const spezialResults = await searchIngredientsOnly(produktname);
+        const spezialResults = await searchIngredientsOnly(rawQuery);
         const urls = spezialResults.map((r) => r.url);
+
+        if (urls.length === 0) {
+          throw new Error("❌ Keine URLs gefunden");
+        }
 
         const response = await fetch(scraperUrl, {
           method: "POST",
@@ -153,21 +146,19 @@ const useOpenAIStore = create(
         const scrapedText = results?.join("\n\n") || "❌ Keine Inhalte gefunden.";
 
         const gptAnswer = await runAssistantWithGoogle(
-          "Formatiere folgenden Text optisch ansprechend – mit Fettschrift für Wirk- und Hilfsstoffe. Gib keine zusätzliche Erklärung.",
+          "Formatiere folgenden Text optisch ansprechend – mit Fettschrift für Wirkstoffe und Hilfsstoffe. Gib keine zusätzliche Erklärung.",
           scrapedText
         );
+
+        const cleaned = cleanGptArtifacts(removeMarkdown(gptAnswer)) + "\n\nQuelle: Google";
 
         set((prev) => ({
           chats: [
             ...prev.chats,
             {
               message: {
-                data: {
-                  content: cleanGptArtifacts(removeMarkdown(gptAnswer)) + "\n\nQuelle: Google",
-                  is_chunk: false,
-                  type: "ai",
-                },
-                content: cleanGptArtifacts(removeMarkdown(gptAnswer)) + "\n\nQuelle: Google",
+                data: { content: cleaned, is_chunk: false, type: "ai" },
+                content: cleaned,
                 type: "ai",
               },
             },
@@ -175,7 +166,23 @@ const useOpenAIStore = create(
           typing: false,
         }));
       } catch {
-        set({ typing: false });
+        set((prev) => ({
+          chats: [
+            ...prev.chats,
+            {
+              message: {
+                data: {
+                  content: "❌ Leider konnte ich keine Inhaltsstoffdaten finden.",
+                  is_chunk: false,
+                  type: "ai",
+                },
+                content: "❌ Leider konnte ich keine Inhaltsstoffdaten finden.",
+                type: "ai",
+              },
+            },
+          ],
+          typing: false,
+        }));
       }
     },
   }))
