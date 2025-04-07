@@ -22,7 +22,27 @@ app.post("/scrape", async (req, res) => {
     try {
       await page.goto(url, { timeout: 15000 });
 
-      const content = await page.evaluate(() => {
+      const content = await page.evaluate((currentUrl) => {
+        if (currentUrl.includes("docmorris.de")) {
+          function getAccordionTableText(label) {
+            const section = document.querySelector(`section[aria-label="${label}"]`);
+            if (!section) return "Nicht gefunden.";
+            const rows = section.querySelectorAll("table tr");
+            return Array.from(rows)
+              .map((row) => {
+                const cells = row.querySelectorAll("td, th");
+                return "• " + Array.from(cells).map((c) => c.textContent.trim()).join(": ");
+              })
+              .join("\n");
+          }
+
+          const wirkstoffe = getAccordionTableText("Wirkstoffe");
+          const hilfsstoffe = getAccordionTableText("Hilfsstoffe");
+
+          return `💊 Wirkstoffe:\n${wirkstoffe}\n\n🧪 Hilfsstoffe:\n${hilfsstoffe}`;
+        }
+
+        // Default-Scraper (z. B. ihreapotheken.de)
         const root = document.querySelector("#pflichtangaben");
         if (!root) return "❌ Bereich '#pflichtangaben' nicht gefunden.";
 
@@ -33,7 +53,6 @@ app.post("/scrape", async (req, res) => {
           );
           if (!heading) return "Nicht gefunden.";
 
-          // Nächstes Element suchen (UL-Liste)
           let next = heading.nextElementSibling;
           while (next && next.tagName.toLowerCase() !== "ul") {
             next = next.nextElementSibling;
@@ -50,7 +69,7 @@ app.post("/scrape", async (req, res) => {
         const hilfsstoffe = getListAfterTitle("hilfsstoff");
 
         return `💊 Wirkstoffe:\n${wirkstoffe}\n\n🧪 Hilfsstoffe:\n${hilfsstoffe}`;
-      });
+      }, url);
 
       results.push(`🔗 ${url}\n${content}`);
     } catch (error) {

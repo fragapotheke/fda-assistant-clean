@@ -1,3 +1,5 @@
+// src/services/useOpenAIStore.ts
+
 import { IDetailsWidget } from "@livechat/agent-app-sdk";
 import { create } from "zustand";
 import { combine } from "zustand/middleware";

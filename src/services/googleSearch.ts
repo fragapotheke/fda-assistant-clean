@@ -1,3 +1,5 @@
+// src/services/googleSearch.ts
+
 const apiKey = process.env.NEXT_PUBLIC_GOOGLE_CSE_API_KEY!;
 const cx = process.env.NEXT_PUBLIC_GOOGLE_CSE_CX!;
 
@@ -26,11 +28,11 @@ export async function searchGoogle(query: string): Promise<GoogleResult[]> {
   }));
 }
 
-// 🌿 Intelligente Inhaltsstoff-Suche auf ihreapotheken.de mit Fallback
+// 🌿 Intelligente Inhaltsstoff-Suche – zuerst docmorris.de, dann ihreapotheken.de als Fallback
 export async function searchIngredientsOnly(produktname: string): Promise<GoogleResult[]> {
-  // 1. Primäre Suche – exakter Produktname im URL
-  const exactQuery = `site:ihreapotheken.de inurl:/produkt/ "${produktname}" Inhaltsstoffe`;
-  let url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(exactQuery)}`;
+  // 1. Primäre Suche auf DocMorris
+  const docMorrisQuery = `site:docmorris.de ${produktname} Inhaltsstoffe`;
+  let url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(docMorrisQuery)}`;
 
   let res = await fetch(url);
   let data = await res.json();
@@ -42,12 +44,12 @@ export async function searchIngredientsOnly(produktname: string): Promise<Google
       url: item.link,
     }));
 
-    console.log("🔍 Inhaltsstoff-Suche (exakt):", results.map((r) => r.url));
+    console.log("🔍 Inhaltsstoff-Suche – DocMorris:", results.map((r) => r.url));
     return results;
   }
 
-  // 2. Fallback – weichere Suche ohne inurl + Anführungszeichen
-  console.warn("⚠️ Exakte Suche ohne Treffer, starte Fallback");
+  // 2. Fallback auf ihreapotheken.de
+  console.warn("⚠️ Keine DocMorris-Ergebnisse, starte Fallback auf ihreapotheken.de");
 
   const fallbackQuery = `site:ihreapotheken.de ${produktname} Inhaltsstoffe`;
   url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(fallbackQuery)}`;
@@ -66,6 +68,6 @@ export async function searchIngredientsOnly(produktname: string): Promise<Google
     url: item.link,
   }));
 
-  console.log("🔍 Inhaltsstoff-Suche (Fallback):", fallbackResults.map((r) => r.url));
+  console.log("🔍 Inhaltsstoff-Suche – Fallback:", fallbackResults.map((r) => r.url));
   return fallbackResults;
 }
