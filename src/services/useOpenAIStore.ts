@@ -55,31 +55,39 @@ function cleanGptArtifacts(text: string): string {
 }
 
 
-function normalizeAndCorrectProductName(input: string): string {
+async function normalizeAndCorrectProductName(input: string): Promise<string> {
   let name = input.toLowerCase();
-
-  // Bindestriche durch Leerzeichen ersetzen
   name = name.replace(/-/g, " ");
-
-  // Überflüssige Leerzeichen entfernen
   name = name.replace(/\s+/g, " ").trim();
 
-  // Hersteller normalisieren
   name = name
-    .replace(/\b1a\b/g, "1A")
-    .replace(/\bratiopharm\b/g, "Ratiopharm")
-    .replace(/\bhexal\b/g, "Hexal")
-    .replace(/\bstada\b/g, "Stada")
-    .replace(/\baliud\b/g, "Aliud")
-    .replace(/\bsandoz\b/g, "Sandoz")
-    .replace(/\bteva\b/g, "Teva")
-    .replace(/\bbasics\b/g, "Basics");
+    .replace(/\b1a\b/i, "1A")
+    .replace(/\bratiopharm\b/i, "Ratiopharm")
+    .replace(/\bhexal\b/i, "Hexal")
+    .replace(/\bstada\b/i, "Stada")
+    .replace(/\baliud\b/i, "Aliud")
+    .replace(/\bsandoz\b/i, "Sandoz")
+    .replace(/\bteva\b/i, "Teva")
+    .replace(/\bbasics\b/i, "Basics");
 
-  // Erste Silbe groß schreiben
-  name = name.charAt(0).toUpperCase() + name.slice(1);
+  const localCorrected = name.charAt(0).toUpperCase() + name.slice(1);
 
-  return name;
+  try {
+    const googleResults = await searchIngredientsOnly(localCorrected);
+    const firstSnippet = googleResults[0]?.snippet || "";
+
+    const match = firstSnippet.match(/([A-ZÄÖÜ][a-zäöüß]+(?:\s\d+\s*mg)?(?:\s+[A-ZÄÖÜ][a-zäöüß]+)+)/);
+    if (match && match[1]) {
+      return match[1].trim();
+    }
+  } catch (e) {
+    console.warn("❗ Fehler bei Snippet-basierter Korrektur:", e);
+  }
+
+  return localCorrected;
 }
+
+
 
 
 const initialState = {
