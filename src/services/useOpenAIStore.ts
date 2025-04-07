@@ -49,9 +49,8 @@ function isAnswerStrong(text: string): boolean {
 function cleanGptArtifacts(text: string): string {
   return text
     .replace(/【\d+:\d+†source】/g, "")
-    .replace(/🔗.*?
-/g, "")  // Zeilen mit "🔗 ..." entfernen
-    .replace(/[💊🧪📄🔗•]/g, "")  // Emojis entfernen
+    .replace(/^🔗.*$/gm, "") // entfernt ganze Zeilen mit "🔗"
+    .replace(/[💊🧪📄🔗•]/g, "") // entfernt Emojis & Aufzählungszeichen
     .trim();
 }
 
