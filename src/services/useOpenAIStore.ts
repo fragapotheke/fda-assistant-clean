@@ -153,7 +153,7 @@ const useOpenAIStore = create(
       const rawQuery = get().message;
       if (!rawQuery || !assistantId) return;
 
-      const normalizedQuery = normalizeAndCorrectProductName(rawQuery);
+      const normalizedQuery = await normalizeAndCorrectProductName(rawQuery);
       const userMessage = `Welche Inhaltsstoffe enthält ${normalizedQuery}?`;
 
       set((prev) => ({
