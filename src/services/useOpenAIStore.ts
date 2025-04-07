@@ -324,7 +324,9 @@ async function runVectorSearch(message: string): Promise<string> {
 
 async function runGoogleSearch(message: string): Promise<string> {
   const results = await searchGoogle(message);
-  const urls = results.map((r) => r.url);
+  const urls = results
+    .map((r) => r.url)
+    .filter((url) => url.startsWith("https://www.docmorris.de/"));
 
   try {
     const res = await fetch(scraperUrl, {
@@ -336,7 +338,8 @@ async function runGoogleSearch(message: string): Promise<string> {
     const { results: fullTexts }: { results: string[] } = await res.json();
 
     return fullTexts
-      .map((text, i) => `📄 Seite ${i + 1}:\n🔗 ${urls[i]}\n${text.slice(0, 2000)}...`)
+      .map((text, i) => `📄 Seite ${i + 1}:
+🔗 ${urls[i]}\n${text.slice(0, 2000)}...`)
       .join("\n\n");
   } catch (err) {
     console.error("❗ Fehler bei externem Scraping:", err);
