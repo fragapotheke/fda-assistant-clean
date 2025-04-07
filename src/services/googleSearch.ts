@@ -1,3 +1,6 @@
+
+// src/services/googleSearch.ts
+
 const apiKey = process.env.NEXT_PUBLIC_GOOGLE_CSE_API_KEY!;
 const cx = process.env.NEXT_PUBLIC_GOOGLE_CSE_CX!;
 
