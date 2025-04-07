@@ -1,4 +1,3 @@
-
 // src/services/googleSearch.ts
 
 const apiKey = process.env.NEXT_PUBLIC_GOOGLE_CSE_API_KEY!;
@@ -31,8 +30,8 @@ export async function searchGoogle(query: string): Promise<GoogleResult[]> {
 
 // 🌿 Intelligente Inhaltsstoff-Suche – zuerst docmorris.de, dann ihreapotheken.de als Fallback
 export async function searchIngredientsOnly(produktname: string): Promise<GoogleResult[]> {
-  const normalized = produktname.toLowerCase();
-  const isMatch = (text: string) => text.toLowerCase().includes(normalized);
+  const firstWord = produktname.split(" ")[0].toLowerCase();
+  const isMatch = (text: string) => text.toLowerCase().includes(firstWord);
 
   // 1. Primäre Suche auf DocMorris
   const docMorrisQuery = `site:docmorris.de ${produktname} Inhaltsstoffe`;
