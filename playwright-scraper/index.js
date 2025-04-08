@@ -3,6 +3,7 @@ const { chromium } = require("playwright");
 const app = express();
 const cors = require("cors");
 
+// ✅ CORS für alle Domains (alternativ: origin einschränken)
 app.use(cors());
 app.use(express.json());
 

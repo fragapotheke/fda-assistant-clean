@@ -195,7 +195,7 @@ const useOpenAIStore = create(
         }
 
         const gptAnswer = await runAssistantWithGoogle(
-          "Formatiere folgenden Text optisch ansprechend – mit Fettschrift für Wirkstoffe und Hilfsstoffe. Gib keine zusätzliche Erklärung.",
+          "Lies den folgenden Text und extrahiere ausschließlich die Wirkstoffe und Hilfsstoffe des Produkts",
           scrapedText
         );
 
