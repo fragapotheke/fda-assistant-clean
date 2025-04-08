@@ -1,11 +1,13 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import useOpenAIStore from "@/services/useOpenAIStore";
 import { IDetailsWidget } from "@livechat/agent-app-sdk";
 
 export default function Chat({ widget }: { widget: IDetailsWidget }) {
   const { chats, typing, message, typeMessage, getSmartAnswer, getIngredientsAnswer } = useOpenAIStore();
+
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,9 +19,13 @@ export default function Chat({ widget }: { widget: IDetailsWidget }) {
     await getIngredientsAnswer(widget);
   };
 
-  const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      console.log("✅ In Zwischenablage kopiert");
+  const handleCopy = (text: string, index: number) => {
+    const cleanedText = text.replace(/(^|\n)🔗?\s?Quelle:.*$/i, "").trim();
+
+    navigator.clipboard.writeText(cleanedText).then(() => {
+      setCopiedIndex(index);
+      setTimeout(() => setCopiedIndex(null), 1000);
+      console.log("✅ In Zwischenablage kopiert (ohne Quelle)");
     });
   };
 
@@ -54,18 +60,19 @@ export default function Chat({ widget }: { widget: IDetailsWidget }) {
             </div>
             {chat.message.type === "ai" && (
               <button
-                onClick={() => handleCopy(chat.message.data.content)}
+                onClick={() => handleCopy(chat.message.data.content, index)}
                 style={{
                   background: "none",
                   border: "none",
                   cursor: "pointer",
                   fontSize: "1rem",
                   padding: 0,
-                  color: "#999",
+                  color: copiedIndex === index ? "#4CAF50" : "#999",
+                  transition: "color 0.3s ease",
                 }}
-                title="Antwort kopieren"
+                title={copiedIndex === index ? "Kopiert!" : "Antwort kopieren"}
               >
-                📋
+                {copiedIndex === index ? "✅" : "📋"}
               </button>
             )}
           </div>
