@@ -20,17 +20,13 @@ export default function Chat({ widget }: { widget: IDetailsWidget }) {
   };
 
   const handleCopy = (text: string, index: number) => {
-    // Entferne alle Zeilen, die mit "Quelle:" oder "🔗 Quelle:" beginnen
-    const cleanedText = text
-      .split("\n")
-      .filter((line) => !/^🔗?\s?Quelle:/i.test(line.trim()))
-      .join("\n")
-      .trim();
+    // Entferne alles ab "Quelle: ..." (inkl. davorstehender Emojis oder Leerzeichen)
+    const cleanedText = text.replace(/[\n\r]?🔗?\s?Quelle:.*$/i, "").trim();
   
     navigator.clipboard.writeText(cleanedText).then(() => {
       setCopiedIndex(index);
       setTimeout(() => setCopiedIndex(null), 1000);
-      console.log("✅ In Zwischenablage kopiert (ohne Quelle)");
+      console.log("✅ In Zwischenablage kopiert (Quelle entfernt)");
     });
   };
 
