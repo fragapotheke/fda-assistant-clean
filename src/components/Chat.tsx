@@ -31,7 +31,7 @@ export default function Chat({ widget }: { widget: IDetailsWidget }) {
             <img src="/logo.png" alt="Logo" />
           </div>
           <div className="chat-head-user-name">
-            <p>FRAG DIE APOTHEKE KI 3.0</p>
+            <p>FRAG DIE APOTHEKE KI 4.0</p>
           </div>
         </div>
       </div>
