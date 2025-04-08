@@ -20,13 +20,16 @@ export default function Chat({ widget }: { widget: IDetailsWidget }) {
   };
 
   const handleCopy = (text: string, index: number) => {
-    // Entferne alles ab "Quelle: ..." (inkl. davorstehender Emojis oder Leerzeichen)
-    const cleanedText = text.replace(/[\n\r]?🔗?\s?Quelle:.*$/i, "").trim();
+    const cleanedText = text
+      .split("\n")
+      .filter((line) => !line.trim().toLowerCase().startsWith("quelle:"))
+      .join("\n")
+      .trim();
   
     navigator.clipboard.writeText(cleanedText).then(() => {
       setCopiedIndex(index);
       setTimeout(() => setCopiedIndex(null), 1000);
-      console.log("✅ In Zwischenablage kopiert (Quelle entfernt)");
+      console.log("✅ In Zwischenablage kopiert (ohne Quellenzeile)");
     });
   };
 
