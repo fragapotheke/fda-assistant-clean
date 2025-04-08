@@ -20,8 +20,13 @@ export default function Chat({ widget }: { widget: IDetailsWidget }) {
   };
 
   const handleCopy = (text: string, index: number) => {
-    const cleanedText = text.replace(/(^|\n)🔗?\s?Quelle:.*$/i, "").trim();
-
+    // Entferne alle Zeilen, die mit "Quelle:" oder "🔗 Quelle:" beginnen
+    const cleanedText = text
+      .split("\n")
+      .filter((line) => !/^🔗?\s?Quelle:/i.test(line.trim()))
+      .join("\n")
+      .trim();
+  
     navigator.clipboard.writeText(cleanedText).then(() => {
       setCopiedIndex(index);
       setTimeout(() => setCopiedIndex(null), 1000);
