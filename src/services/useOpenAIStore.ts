@@ -70,23 +70,12 @@ async function normalizeAndCorrectProductName(input: string): Promise<string> {
     .replace(/\bteva\b/i, "Teva")
     .replace(/\bbasics\b/i, "Basics");
 
+  // Großschreibung der ersten Silbe beibehalten
   const localCorrected = name.charAt(0).toUpperCase() + name.slice(1);
 
-  try {
-    const googleResults = await searchIngredientsOnly(localCorrected);
-    const firstSnippet = googleResults[0]?.snippet || "";
-
-    const match = firstSnippet.match(/([A-ZÄÖÜ][a-zäöüß]+(?:\s\d+\s*mg)?(?:\s+[A-ZÄÖÜ][a-zäöüß]+)+)/);
-    if (match && match[1]) {
-      return match[1].trim();
-    }
-  } catch (e) {
-    console.warn("❗ Fehler bei Snippet-basierter Korrektur:", e);
-  }
-
+  // Kein Snippet-Matching mehr
   return localCorrected;
 }
-
 
 
 
